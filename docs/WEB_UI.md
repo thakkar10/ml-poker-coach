@@ -14,6 +14,10 @@ The web UI is the first playable product surface for ML Poker Coach.
 - AI coach recommendation panel.
 - Equity, pot odds, and confidence bars.
 - Bot action history panel.
+- Animated chip bursts when a player calls or raises.
+- Folded-seat treatment with dimmed cards.
+- Current-player pulse.
+- Action flash and latest-move badges when bots act.
 
 ## How It Connects
 

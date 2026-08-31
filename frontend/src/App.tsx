@@ -4,12 +4,17 @@ import { applyAction, BotAction, Coach, createGame, GameResponse, Player } from 
 
 const seatPositions = ["seat-user", "seat-left", "seat-top", "seat-right"];
 
+type VisualAction = Pick<BotAction, "player_id" | "player_name" | "action" | "amount"> & {
+  id: string;
+};
+
 export function App() {
   const [gameResponse, setGameResponse] = useState<GameResponse | null>(null);
   const [botHistory, setBotHistory] = useState<BotAction[]>([]);
   const [raiseAmount, setRaiseAmount] = useState(80);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [visualActions, setVisualActions] = useState<VisualAction[]>([]);
 
   const game = gameResponse?.game ?? null;
   const coach = gameResponse?.coach ?? null;
@@ -25,6 +30,17 @@ export function App() {
     }
     return actions;
   }, [botHistory]);
+  const actingPlayerIds = useMemo(
+    () => new Set(visualActions.map((action) => action.player_id)),
+    [visualActions],
+  );
+
+  useEffect(() => {
+    if (!visualActions.length) return;
+
+    const timeout = window.setTimeout(() => setVisualActions([]), 1600);
+    return () => window.clearTimeout(timeout);
+  }, [visualActions]);
 
   useEffect(() => {
     void startNewGame();
@@ -37,6 +53,7 @@ export function App() {
       const nextGame = await createGame();
       setGameResponse(nextGame);
       setBotHistory(nextGame.bot_actions);
+      setVisualActions(toVisualActions(nextGame.bot_actions));
       setRaiseAmount(80);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start game");
@@ -52,6 +69,16 @@ export function App() {
     try {
       const nextGame = await applyAction(game.id, action, action === "raise" ? raiseAmount : 0);
       setGameResponse(nextGame);
+      setVisualActions([
+        {
+          id: `p0-${Date.now()}-${action}`,
+          player_id: "p0",
+          player_name: "You",
+          action,
+          amount: action === "raise" ? raiseAmount : 0,
+        },
+        ...toVisualActions(nextGame.bot_actions),
+      ]);
       setBotHistory((previous) => [...nextGame.bot_actions, ...previous].slice(0, 8));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Action failed");
@@ -98,6 +125,7 @@ export function App() {
               isUser={player.id === "p0"}
               showdownLabel={game.showdown[player.id]}
               lastAction={latestActions.get(player.id)}
+              isActing={actingPlayerIds.has(player.id)}
             />
           ))}
 
@@ -113,6 +141,7 @@ export function App() {
             </div>
             <div className="street-pill">{game?.street ?? "loading"}</div>
           </div>
+          <ChipBursts actions={visualActions} />
           <RecentActions actions={botHistory.slice(0, 3)} />
         </div>
 
@@ -164,6 +193,7 @@ function PlayerSeat({
   isUser,
   showdownLabel,
   lastAction,
+  isActing,
 }: {
   player: Player;
   position: string;
@@ -171,9 +201,14 @@ function PlayerSeat({
   isUser: boolean;
   showdownLabel?: string;
   lastAction?: BotAction;
+  isActing: boolean;
 }) {
   return (
-    <article className={`player-seat ${position} ${isCurrent ? "is-current" : ""} ${player.folded ? "is-folded" : ""}`}>
+    <article
+      className={`player-seat ${position} ${isCurrent ? "is-current" : ""} ${
+        player.folded ? "is-folded" : ""
+      } ${isActing ? "is-acting" : ""}`}
+    >
       <div className="seat-meta">
         <strong>{player.name}</strong>
         <span>${player.stack}</span>
@@ -188,7 +223,7 @@ function PlayerSeat({
         {player.current_bet > 0 && <b>Bet ${player.current_bet}</b>}
       </div>
       {lastAction && (
-        <p className="action-badge">
+        <p className={`action-badge ${lastAction.action === "fold" ? "fold-action" : ""}`}>
           Last move: {lastAction.action}
           {lastAction.amount > 0 ? ` $${lastAction.amount}` : ""}
         </p>
@@ -302,6 +337,27 @@ function RecentActions({ actions }: { actions: BotAction[] }) {
   );
 }
 
+function ChipBursts({ actions }: { actions: VisualAction[] }) {
+  const moneyActions = actions.filter((action) => action.action === "call" || action.action === "raise");
+  if (!moneyActions.length) return null;
+
+  return (
+    <div className="chip-layer" aria-hidden="true">
+      {moneyActions.slice(0, 5).map((action, index) => (
+        <div
+          className={`chip-burst from-${action.player_id}`}
+          key={action.id}
+          style={{ animationDelay: `${index * 120}ms` }}
+        >
+          <span />
+          <span />
+          <span />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function MetricBar({ label, value }: { label: string; value: number }) {
   return (
     <div className="metric">
@@ -314,6 +370,17 @@ function MetricBar({ label, value }: { label: string; value: number }) {
       </div>
     </div>
   );
+}
+
+function toVisualActions(actions: BotAction[]): VisualAction[] {
+  const timestamp = Date.now();
+  return actions.map((action, index) => ({
+    id: `${action.player_id}-${timestamp}-${index}-${action.action}`,
+    player_id: action.player_id,
+    player_name: action.player_name,
+    action: action.action,
+    amount: action.amount,
+  }));
 }
 
 type HandLesson = {
