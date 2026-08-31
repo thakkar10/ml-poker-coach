@@ -29,7 +29,7 @@ button {
 
 .app-shell {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-columns: minmax(0, 1fr) 420px;
   gap: 20px;
   min-height: 100vh;
   padding: 20px;
@@ -320,6 +320,43 @@ h2 {
   font-weight: 800;
 }
 
+.action-badge {
+  margin: 0;
+  padding: 7px 9px;
+  border: 1px solid rgba(229, 185, 79, 0.26);
+  border-radius: 999px;
+  background: rgba(229, 185, 79, 0.12);
+  color: #fff2bf;
+  font-size: 0.74rem;
+  font-weight: 900;
+  text-transform: capitalize;
+}
+
+.recent-actions {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  left: 18px;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.recent-actions span {
+  padding: 8px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(8, 13, 15, 0.78);
+  color: #fff7d6;
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-transform: capitalize;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.26);
+}
+
 .action-dock {
   display: flex;
   align-items: center;
@@ -400,7 +437,10 @@ h2 {
 .recommendation span,
 .metric span,
 .empty-state,
-.history-list p {
+.history-list p,
+.lesson-stats span,
+.lesson-stats p,
+.stat-explainer p {
   color: #b8c5ca;
 }
 
@@ -447,6 +487,92 @@ h2 {
 
 .reason-list li {
   line-height: 1.45;
+}
+
+.stat-explainer {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.stat-explainer p {
+  margin-bottom: 0;
+  font-size: 0.86rem;
+  line-height: 1.42;
+}
+
+.stat-explainer strong {
+  color: #fff7d6;
+}
+
+.lesson-summary {
+  display: grid;
+  gap: 5px;
+  padding: 14px;
+  border-radius: 8px;
+}
+
+.lesson-summary span {
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.lesson-summary strong {
+  font-size: 1.08rem;
+  line-height: 1.2;
+}
+
+.lesson-summary.premium {
+  background: linear-gradient(135deg, rgba(229, 185, 79, 0.22), rgba(42, 180, 116, 0.16));
+}
+
+.lesson-summary.playable {
+  background: linear-gradient(135deg, rgba(42, 180, 116, 0.2), rgba(80, 132, 196, 0.14));
+}
+
+.lesson-summary.caution {
+  background: linear-gradient(135deg, rgba(185, 70, 70, 0.24), rgba(229, 185, 79, 0.1));
+}
+
+.lesson-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.lesson-stats article {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.lesson-stats span {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.lesson-stats strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #fff7d6;
+  font-size: 1rem;
+}
+
+.lesson-stats p {
+  margin-bottom: 0;
+  font-size: 0.82rem;
+  line-height: 1.36;
 }
 
 .empty-state {
@@ -496,6 +622,10 @@ h2 {
   .side-panel {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .lesson-panel {
+    grid-column: 1 / -1;
+  }
 }
 
 @media (max-width: 760px) {
@@ -543,7 +673,14 @@ h2 {
   }
 
   .actions,
-  .side-panel {
+  .side-panel,
+  .lesson-stats {
     grid-template-columns: 1fr;
+  }
+
+  .recent-actions {
+    right: 10px;
+    bottom: 10px;
+    left: 10px;
   }
 }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Brain, CircleDollarSign, History, Loader2, Play, RotateCcw } from "lucide-react";
-import { applyAction, BotAction, Coach, createGame, GameResponse, GameState, Player } from "./api";
+import { BookOpen, Brain, CircleDollarSign, History, Loader2, RotateCcw } from "lucide-react";
+import { applyAction, BotAction, Coach, createGame, GameResponse, Player } from "./api";
 
 const seatPositions = ["seat-user", "seat-left", "seat-top", "seat-right"];
 
@@ -15,6 +15,16 @@ export function App() {
   const coach = gameResponse?.coach ?? null;
   const user = game?.players[0] ?? null;
   const canAct = game?.current_player_id === "p0" && game.street !== "complete";
+  const handLesson = useMemo(() => explainStartingHand(user?.hole_cards ?? []), [user?.hole_cards]);
+  const latestActions = useMemo(() => {
+    const actions = new Map<string, BotAction>();
+    for (const action of botHistory) {
+      if (!actions.has(action.player_id)) {
+        actions.set(action.player_id, action);
+      }
+    }
+    return actions;
+  }, [botHistory]);
 
   useEffect(() => {
     void startNewGame();
@@ -87,6 +97,7 @@ export function App() {
               isCurrent={game.current_player_id === player.id}
               isUser={player.id === "p0"}
               showdownLabel={game.showdown[player.id]}
+              lastAction={latestActions.get(player.id)}
             />
           ))}
 
@@ -102,6 +113,7 @@ export function App() {
             </div>
             <div className="street-pill">{game?.street ?? "loading"}</div>
           </div>
+          <RecentActions actions={botHistory.slice(0, 3)} />
         </div>
 
         <section className="action-dock" aria-label="Player actions">
@@ -138,6 +150,7 @@ export function App() {
 
       <aside className="side-panel">
         <CoachPanel coach={coach} />
+        <HandLessonPanel lesson={handLesson} />
         <HistoryPanel botHistory={botHistory} />
       </aside>
     </main>
@@ -150,12 +163,14 @@ function PlayerSeat({
   isCurrent,
   isUser,
   showdownLabel,
+  lastAction,
 }: {
   player: Player;
   position: string;
   isCurrent: boolean;
   isUser: boolean;
   showdownLabel?: string;
+  lastAction?: BotAction;
 }) {
   return (
     <article className={`player-seat ${position} ${isCurrent ? "is-current" : ""} ${player.folded ? "is-folded" : ""}`}>
@@ -172,6 +187,12 @@ function PlayerSeat({
         <span>{player.folded ? "Folded" : isUser ? "Hero" : "AI Opponent"}</span>
         {player.current_bet > 0 && <b>Bet ${player.current_bet}</b>}
       </div>
+      {lastAction && (
+        <p className="action-badge">
+          Last move: {lastAction.action}
+          {lastAction.amount > 0 ? ` $${lastAction.amount}` : ""}
+        </p>
+      )}
       {showdownLabel && <p className="showdown-label">{showdownLabel}</p>}
     </article>
   );
@@ -214,6 +235,16 @@ function CoachPanel({ coach }: { coach: Coach | null }) {
           <MetricBar label="Equity" value={coach.equity} />
           <MetricBar label="Pot Odds" value={coach.pot_odds} />
           <MetricBar label="Confidence" value={coach.confidence} />
+          <div className="stat-explainer">
+            <p>
+              <strong>Equity</strong> is how often your hand is expected to win if the unknown cards are dealt many
+              times.
+            </p>
+            <p>
+              <strong>Pot odds</strong> is the break-even price to call. If equity is higher than pot odds, calling
+              can be profitable.
+            </p>
+          </div>
           <ul className="reason-list">
             {coach.reasons.map((reason) => (
               <li key={reason}>{reason}</li>
@@ -224,6 +255,50 @@ function CoachPanel({ coach }: { coach: Coach | null }) {
         <p className="empty-state">Coach advice appears when it is your turn to act.</p>
       )}
     </section>
+  );
+}
+
+function HandLessonPanel({ lesson }: { lesson: HandLesson }) {
+  return (
+    <section className="panel lesson-panel">
+      <div className="panel-title">
+        <BookOpen size={20} />
+        <h2>Your Hand</h2>
+      </div>
+      <div className={`lesson-summary ${lesson.tone}`}>
+        <span>{lesson.strength}</span>
+        <strong>{lesson.title}</strong>
+      </div>
+      <ul className="reason-list">
+        {lesson.reasons.map((reason) => (
+          <li key={reason}>{reason}</li>
+        ))}
+      </ul>
+      <div className="lesson-stats">
+        {lesson.stats.map((stat) => (
+          <article key={stat.label}>
+            <span>{stat.label}</span>
+            <strong>{stat.value}</strong>
+            <p>{stat.description}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function RecentActions({ actions }: { actions: BotAction[] }) {
+  if (!actions.length) return null;
+
+  return (
+    <div className="recent-actions" aria-label="Recent bot actions">
+      {actions.map((action, index) => (
+        <span key={`${action.player_id}-${index}`}>
+          {action.player_name} {action.action}
+          {action.amount > 0 ? ` $${action.amount}` : ""}
+        </span>
+      ))}
+    </div>
   );
 }
 
@@ -239,6 +314,166 @@ function MetricBar({ label, value }: { label: string; value: number }) {
       </div>
     </div>
   );
+}
+
+type HandLesson = {
+  title: string;
+  strength: string;
+  tone: "premium" | "playable" | "caution";
+  reasons: string[];
+  stats: Array<{ label: string; value: string; description: string }>;
+};
+
+const rankValues: Record<string, number> = {
+  "2": 2,
+  "3": 3,
+  "4": 4,
+  "5": 5,
+  "6": 6,
+  "7": 7,
+  "8": 8,
+  "9": 9,
+  T: 10,
+  J: 11,
+  Q: 12,
+  K: 13,
+  A: 14,
+};
+
+const rankNames: Record<string, string> = {
+  "2": "Two",
+  "3": "Three",
+  "4": "Four",
+  "5": "Five",
+  "6": "Six",
+  "7": "Seven",
+  "8": "Eight",
+  "9": "Nine",
+  T: "Ten",
+  J: "Jack",
+  Q: "Queen",
+  K: "King",
+  A: "Ace",
+};
+
+function explainStartingHand(cards: string[]): HandLesson {
+  if (cards.length < 2) {
+    return {
+      title: "Waiting for cards",
+      strength: "No hand yet",
+      tone: "caution",
+      reasons: ["Start a new hand to see a beginner-friendly explanation of your cards."],
+      stats: [],
+    };
+  }
+
+  const [first, second] = cards;
+  const firstRank = first[0];
+  const secondRank = second[0];
+  const firstSuit = first[1];
+  const secondSuit = second[1];
+  const values = [rankValues[firstRank], rankValues[secondRank]].sort((a, b) => b - a);
+  const high = values[0];
+  const low = values[1];
+  const pair = firstRank === secondRank;
+  const suited = firstSuit === secondSuit;
+  const gap = Math.abs(high - low);
+  const connected = gap === 1 || (high === 14 && low === 5);
+  const broadwayCount = values.filter((value) => value >= 10).length;
+  const names = `${rankNames[firstRank]}-${rankNames[secondRank]}`;
+
+  if (pair && high === 14) {
+    return {
+      title: "Pocket aces are the best starting hand",
+      strength: "Premium",
+      tone: "premium",
+      reasons: [
+        "You already have the highest possible pair before the flop.",
+        "Most opponents need to improve to two pair, trips, a straight, or a flush to beat you.",
+        "This hand usually wants to raise because strong hands make money by building the pot against worse hands.",
+      ],
+      stats: [
+        {
+          label: "Heads-up equity",
+          value: "about 85%",
+          description: "Against one random hand, pocket aces win roughly 85 out of 100 times.",
+        },
+        {
+          label: "Set on flop",
+          value: "about 12%",
+          description: "Any pocket pair flops three of a kind about once every 8 flops.",
+        },
+      ],
+    };
+  }
+
+  if (pair) {
+    const premiumPair = high >= 11;
+    return {
+      title: `${rankNames[firstRank]} pair starts ahead`,
+      strength: premiumPair ? "Strong" : "Playable",
+      tone: premiumPair ? "premium" : "playable",
+      reasons: [
+        "A pocket pair is already a made hand, which is better than hoping to pair later.",
+        premiumPair
+          ? "High pairs can often win without improving."
+          : "Small and medium pairs are useful, but they become much stronger when they flop a set.",
+        "Pairs lose value against many opponents because more players means more chances someone improves.",
+      ],
+      stats: [
+        {
+          label: "Set on flop",
+          value: "about 12%",
+          description: "This is why small pairs often want a cheap flop instead of a huge pot.",
+        },
+        {
+          label: "Made hand",
+          value: "yes",
+          description: "You already have a pair before any community cards are dealt.",
+        },
+      ],
+    };
+  }
+
+  const weakKicker = high >= 11 && low <= 5;
+  const veryWeak = high <= 11 && low <= 6 && !suited && !connected;
+  const strongBroadway = broadwayCount === 2;
+  const tone: HandLesson["tone"] = strongBroadway || (suited && connected && high >= 10) ? "premium" : veryWeak || weakKicker ? "caution" : "playable";
+
+  return {
+    title: `${names}${suited ? " suited" : " offsuit"}`,
+    strength: tone === "premium" ? "Strong draw potential" : tone === "playable" ? "Playable with caution" : "Weak starting hand",
+    tone,
+    reasons: [
+      strongBroadway
+        ? "Two high cards can make strong top-pair hands after the flop."
+        : weakKicker
+          ? "One high card with a very low kicker is easy to dominate. If you pair the high card, another player may have the same pair with a better kicker."
+          : "Unpaired hands usually need help from the community cards.",
+      suited
+        ? "Being suited gives you a chance to make a flush, but that chance is still small."
+        : "Offsuit cards have less flush potential, so they need more help in other ways.",
+      connected
+        ? "Connected cards can make straights more easily than hands with big gaps."
+        : gap >= 5
+          ? "Big gaps make straights unlikely, which lowers the hand's playability."
+          : "Small gaps can still make some straight draws, but they are weaker than connected cards.",
+    ],
+    stats: [
+      {
+        label: "Pair on flop",
+        value: "about 32%",
+        description: "Two unpaired cards hit at least one pair on the flop roughly one-third of the time.",
+      },
+      {
+        label: "Flush by river",
+        value: suited ? "about 6%" : "not available",
+        description: suited
+          ? "Suited cards can make a flush by the river, but it does not happen often enough by itself to make weak cards great."
+          : "Offsuit starting cards cannot make a two-card flush using both hole cards.",
+      },
+    ],
+  };
 }
 
 function HistoryPanel({ botHistory }: { botHistory: BotAction[] }) {
