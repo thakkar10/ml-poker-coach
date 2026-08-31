@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+
+# Data and model artifacts generated locally
+data/generated/
+models/*.pkl
+models/*.joblib
+
+# Frontend
+node_modules/
+dist/
+.vite/
+
+# Environment
+.env
+.DS_Store

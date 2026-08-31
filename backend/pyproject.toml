@@ -1,0 +1,15 @@
+[project]
+name = "ml-poker-coach-backend"
+version = "0.1.0"
+description = "Core poker engine and AI coaching backend for ML Poker Coach."
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
