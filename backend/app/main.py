@@ -34,7 +34,11 @@ def health() -> dict[str, str]:
 @app.post("/api/game/new", response_model=GameResponse)
 def create_game(request: NewGameRequest) -> GameResponse:
     session = store.create(request.player_names, seed=request.seed)
-    return _response(session)
+    bot_logs = session.runner.play_until_user_turn_or_complete(
+        session.game,
+        user_player_id="p0",
+    )
+    return _response(session, bot_actions=serialize_bot_logs(bot_logs))
 
 
 @app.get("/api/game/{game_id}", response_model=GameResponse)

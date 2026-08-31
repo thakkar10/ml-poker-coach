@@ -26,7 +26,7 @@ export function App() {
     try {
       const nextGame = await createGame();
       setGameResponse(nextGame);
-      setBotHistory([]);
+      setBotHistory(nextGame.bot_actions);
       setRaiseAmount(80);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start game");

@@ -29,6 +29,21 @@ def test_create_game_returns_public_state_and_coach() -> None:
     assert payload["coach"]["action"] in payload["game"]["legal_actions"]
 
 
+def test_create_four_player_game_runs_opening_bot_actions_until_user_turn() -> None:
+    response = client.post(
+        "/api/game/new",
+        json={
+            "player_names": ["You", "Tight Bot", "Aggressive Bot", "Equity Bot"],
+            "seed": 222,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["game"]["current_player_id"] == "p0" or payload["game"]["street"] == "complete"
+    assert payload["bot_actions"]
+
+
 def test_get_game_by_id() -> None:
     created = client.post(
         "/api/game/new",
