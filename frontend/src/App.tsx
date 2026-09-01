@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, Brain, CircleDollarSign, History, Loader2, RotateCcw } from "lucide-react";
-import { applyAction, BotAction, Coach, createGame, GameResponse, Player } from "./api";
+import { BookOpen, Brain, CircleDollarSign, History, Loader2, RotateCcw, TrendingUp } from "lucide-react";
+import { applyAction, BotAction, Coach, createGame, GameResponse, getGameReview, Player, PlayerReview } from "./api";
 
 const seatPositions = ["seat-user", "seat-left", "seat-top", "seat-right"];
 const ACTION_REPLAY_MS = 1250;
@@ -17,6 +17,7 @@ export function App() {
   const [replaying, setReplaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [visualActions, setVisualActions] = useState<VisualAction[]>([]);
+  const [playerReview, setPlayerReview] = useState<PlayerReview | null>(null);
 
   const game = gameResponse?.game ?? null;
   const coach = gameResponse?.coach ?? null;
@@ -55,7 +56,11 @@ export function App() {
       const nextGame = await createGame();
       setGameResponse(nextGame);
       setBotHistory([]);
+      setPlayerReview(null);
       await replayActions(nextGame.bot_actions);
+      if (nextGame.game.street === "complete") {
+        await loadReview(nextGame.game.id);
+      }
       setRaiseAmount(80);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start game");
@@ -80,10 +85,22 @@ export function App() {
       };
       await replayActions([userAction, ...nextGame.bot_actions], { includeInLog: nextGame.bot_actions });
       setGameResponse(nextGame);
+      if (nextGame.game.street === "complete") {
+        await loadReview(nextGame.game.id);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Action failed");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadReview(gameId: string) {
+    try {
+      const review = await getGameReview(gameId);
+      setPlayerReview(review);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load game review");
     }
   }
 
@@ -200,6 +217,7 @@ export function App() {
 
       <aside className="side-panel">
         <CoachPanel coach={coach} />
+        {playerReview && <PlayerReviewPanel review={playerReview} />}
         <HandLessonPanel lesson={handLesson} />
         <HistoryPanel botHistory={botHistory} />
       </aside>
@@ -315,6 +333,53 @@ function CoachPanel({ coach }: { coach: Coach | null }) {
         <p className="empty-state">Coach advice appears when it is your turn to act.</p>
       )}
     </section>
+  );
+}
+
+function PlayerReviewPanel({ review }: { review: PlayerReview }) {
+  return (
+    <section className="panel review-panel">
+      <div className="panel-title">
+        <TrendingUp size={20} />
+        <h2>Style Review</h2>
+      </div>
+      <div className="review-summary">
+        <span>Your current style</span>
+        <strong>{review.style}</strong>
+        <p>{review.summary}</p>
+      </div>
+      <div className="review-metrics">
+        <MiniMetric label="Fold" value={review.fold_rate} />
+        <MiniMetric label="Call/Check" value={review.call_rate} />
+        <MiniMetric label="Raise" value={review.raise_rate} />
+        <MiniMetric label="Coach Match" value={review.coach_alignment} />
+      </div>
+      <ReviewList title="Leaks to fix" items={review.leaks} />
+      <ReviewList title="Strengths" items={review.strengths} />
+      <ReviewList title="Next steps" items={review.next_steps} />
+    </section>
+  );
+}
+
+function MiniMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <article>
+      <span>{label}</span>
+      <strong>{Math.round(value * 100)}%</strong>
+    </article>
+  );
+}
+
+function ReviewList({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div className="review-list">
+      <h3>{title}</h3>
+      <ul>
+        {items.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

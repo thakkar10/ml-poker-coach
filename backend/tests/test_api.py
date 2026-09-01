@@ -97,6 +97,27 @@ def test_user_fold_allows_remaining_bots_to_finish_hand() -> None:
     assert any(action["player_id"] != "p0" for action in payload["bot_actions"])
 
 
+def test_review_endpoint_returns_player_style_after_decision() -> None:
+    created = client.post(
+        "/api/game/new",
+        json={"player_names": ["You", "Tight Bot", "Aggressive Bot", "Equity Bot"], "seed": 445},
+    ).json()
+    game_id = created["game"]["id"]
+    client.post(
+        f"/api/game/{game_id}/action",
+        json={"action": "fold", "amount": 0},
+    )
+
+    response = client.get(f"/api/game/{game_id}/review")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decisions"] == 1
+    assert payload["style"]
+    assert payload["decision_log"][0]["action"] == "fold"
+    assert "coach_alignment" in payload
+
+
 def test_apply_unknown_action_returns_400() -> None:
     created = client.post(
         "/api/game/new",

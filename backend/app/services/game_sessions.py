@@ -6,6 +6,7 @@ from app.agents import AggressiveBot, BotAgent, EquityBot, RandomBot, TightBot
 from app.coach import PokerCoach
 from app.coach.equity import EquitySimulator
 from app.core.game import Action, PokerGame, Street
+from app.ml import DecisionLog, PlayerStyleAnalyzer
 from app.services.table_runner import BotActionLog, TableRunner
 
 
@@ -14,6 +15,7 @@ class GameSession:
     game: PokerGame
     runner: TableRunner
     coach: PokerCoach
+    decision_logs: list[DecisionLog]
 
 
 class GameSessionStore:
@@ -26,6 +28,7 @@ class GameSessionStore:
             game=game,
             runner=TableRunner(_default_agents(game)),
             coach=PokerCoach(EquitySimulator(simulations=500, seed=seed)),
+            decision_logs=[],
         )
         self._sessions[game.id] = session
         return session
@@ -52,12 +55,47 @@ class GameSessionStore:
         if game.current_player.id != user_player_id:
             raise ValueError("It is not currently the user's turn")
 
+        recommendation = session.coach.recommend(game, player_id=user_player_id)
+        player = _player(game, user_player_id)
+        session.decision_logs.append(
+            DecisionLog(
+                street=game.street.value,
+                action=action,
+                amount=amount,
+                recommended_action=recommendation.action,
+                equity=recommendation.equity,
+                pot_odds=recommendation.pot_odds,
+                confidence=recommendation.confidence,
+                pot=game.pot,
+                current_bet=game.current_bet,
+                active_players=len(game.active_players),
+            )
+        )
         game.apply_action(action, amount)
         bot_logs = session.runner.play_until_user_turn_or_complete(
             game,
             user_player_id=user_player_id,
         )
         return session, bot_logs
+
+    def review(self, game_id: str) -> dict[str, object]:
+        session = self.get(game_id)
+        review = PlayerStyleAnalyzer().analyze(session.decision_logs)
+        return {
+            **review.to_dict(),
+            "decision_log": [
+                {
+                    "street": decision.street,
+                    "action": decision.action.value,
+                    "recommended_action": decision.recommended_action.value,
+                    "equity": round(decision.equity, 4),
+                    "pot_odds": round(decision.pot_odds, 4),
+                    "confidence": round(decision.confidence, 4),
+                    "followed_coach": decision.followed_coach,
+                }
+                for decision in session.decision_logs
+            ],
+        }
 
 
 def serialize_bot_logs(logs: list[BotActionLog]) -> list[dict[str, object]]:
@@ -87,3 +125,10 @@ def _default_agents(game: PokerGame) -> dict[str, BotAgent]:
         for index, player in enumerate(game.players)
         if index > 0
     }
+
+
+def _player(game: PokerGame, player_id: str):
+    for player in game.players:
+        if player.id == player_id:
+            return player
+    raise KeyError(f"Unknown player id: {player_id}")

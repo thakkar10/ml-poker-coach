@@ -45,6 +45,31 @@ export type GameResponse = {
   bot_actions: BotAction[];
 };
 
+export type DecisionReview = {
+  street: string;
+  action: string;
+  recommended_action: string;
+  equity: number;
+  pot_odds: number;
+  confidence: number;
+  followed_coach: boolean;
+};
+
+export type PlayerReview = {
+  style: string;
+  summary: string;
+  decisions: number;
+  fold_rate: number;
+  call_rate: number;
+  raise_rate: number;
+  coach_alignment: number;
+  avg_equity_edge: number;
+  leaks: string[];
+  strengths: string[];
+  next_steps: string[];
+  decision_log: DecisionReview[];
+};
+
 export async function createGame(): Promise<GameResponse> {
   const response = await fetch("/api/game/new", {
     method: "POST",
@@ -67,6 +92,15 @@ export async function applyAction(
     body: JSON.stringify({ action, amount }),
   });
   return readResponse(response);
+}
+
+export async function getGameReview(gameId: string): Promise<PlayerReview> {
+  const response = await fetch(`/api/game/${gameId}/review`);
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: "Review failed" }));
+    throw new Error(error.detail ?? "Review failed");
+  }
+  return response.json();
 }
 
 async function readResponse(response: Response): Promise<GameResponse> {

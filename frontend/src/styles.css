@@ -652,6 +652,82 @@ h2 {
   margin-top: 14px;
 }
 
+.review-summary {
+  display: grid;
+  gap: 7px;
+  padding: 14px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(80, 132, 196, 0.24), rgba(42, 180, 116, 0.14));
+}
+
+.review-summary span {
+  color: #b8c5ca;
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.review-summary strong {
+  color: #fff7d6;
+  font-size: 1.35rem;
+}
+
+.review-summary p {
+  margin-bottom: 0;
+  color: #eef5f2;
+  line-height: 1.42;
+}
+
+.review-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.review-metrics article {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.review-metrics span {
+  display: block;
+  margin-bottom: 4px;
+  color: #b8c5ca;
+  font-size: 0.68rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.review-metrics strong {
+  color: #fff7d6;
+}
+
+.review-list {
+  margin-top: 14px;
+}
+
+.review-list h3 {
+  margin: 0 0 8px;
+  color: #f7e6a7;
+  font-size: 0.86rem;
+}
+
+.review-list ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+  color: #eef5f2;
+}
+
+.review-list li {
+  line-height: 1.4;
+}
+
 .lesson-stats article {
   min-width: 0;
   padding: 12px;
@@ -832,6 +908,10 @@ h2 {
   .lesson-panel {
     grid-column: 1 / -1;
   }
+
+  .review-panel {
+    grid-column: 1 / -1;
+  }
 }
 
 @media (max-width: 760px) {
@@ -880,7 +960,8 @@ h2 {
 
   .actions,
   .side-panel,
-  .lesson-stats {
+  .lesson-stats,
+  .review-metrics {
     grid-template-columns: 1fr;
   }
 

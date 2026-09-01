@@ -74,6 +74,14 @@ def get_coach_recommendation(game_id: str) -> dict[str, object]:
     return _coach_or_none(session) or {"available": False}
 
 
+@app.get("/api/game/{game_id}/review")
+def get_game_review(game_id: str) -> dict[str, object]:
+    try:
+        return store.review(game_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Game not found") from exc
+
+
 def _session_or_404(game_id: str):
     try:
         return store.get(game_id)
