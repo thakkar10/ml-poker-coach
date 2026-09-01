@@ -77,6 +77,26 @@ def test_apply_user_action_runs_bot_turns() -> None:
     assert isinstance(payload["bot_actions"], list)
 
 
+def test_user_fold_allows_remaining_bots_to_finish_hand() -> None:
+    created = client.post(
+        "/api/game/new",
+        json={"player_names": ["You", "Tight Bot", "Aggressive Bot", "Equity Bot"], "seed": 445},
+    ).json()
+    game_id = created["game"]["id"]
+
+    response = client.post(
+        f"/api/game/{game_id}/action",
+        json={"action": "fold", "amount": 0},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["game"]["street"] == "complete"
+    assert payload["game"]["players"][0]["folded"] is True
+    assert payload["bot_actions"]
+    assert any(action["player_id"] != "p0" for action in payload["bot_actions"])
+
+
 def test_apply_unknown_action_returns_400() -> None:
     created = client.post(
         "/api/game/new",

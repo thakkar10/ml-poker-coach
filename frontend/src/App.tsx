@@ -3,6 +3,7 @@ import { BookOpen, Brain, CircleDollarSign, History, Loader2, RotateCcw } from "
 import { applyAction, BotAction, Coach, createGame, GameResponse, Player } from "./api";
 
 const seatPositions = ["seat-user", "seat-left", "seat-top", "seat-right"];
+const ACTION_REPLAY_MS = 1250;
 
 type VisualAction = Pick<BotAction, "player_id" | "player_name" | "action" | "amount"> & {
   id: string;
@@ -13,13 +14,14 @@ export function App() {
   const [botHistory, setBotHistory] = useState<BotAction[]>([]);
   const [raiseAmount, setRaiseAmount] = useState(80);
   const [loading, setLoading] = useState(false);
+  const [replaying, setReplaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [visualActions, setVisualActions] = useState<VisualAction[]>([]);
 
   const game = gameResponse?.game ?? null;
   const coach = gameResponse?.coach ?? null;
   const user = game?.players[0] ?? null;
-  const canAct = game?.current_player_id === "p0" && game.street !== "complete";
+  const canAct = game?.current_player_id === "p0" && game.street !== "complete" && !replaying;
   const handLesson = useMemo(() => explainStartingHand(user?.hole_cards ?? []), [user?.hole_cards]);
   const latestActions = useMemo(() => {
     const actions = new Map<string, BotAction>();
@@ -38,7 +40,7 @@ export function App() {
   useEffect(() => {
     if (!visualActions.length) return;
 
-    const timeout = window.setTimeout(() => setVisualActions([]), 1600);
+    const timeout = window.setTimeout(() => setVisualActions([]), ACTION_REPLAY_MS);
     return () => window.clearTimeout(timeout);
   }, [visualActions]);
 
@@ -52,8 +54,8 @@ export function App() {
     try {
       const nextGame = await createGame();
       setGameResponse(nextGame);
-      setBotHistory(nextGame.bot_actions);
-      setVisualActions(toVisualActions(nextGame.bot_actions));
+      setBotHistory([]);
+      await replayActions(nextGame.bot_actions);
       setRaiseAmount(80);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start game");
@@ -68,23 +70,40 @@ export function App() {
     setError(null);
     try {
       const nextGame = await applyAction(game.id, action, action === "raise" ? raiseAmount : 0);
+      const userAction = {
+        player_id: "p0",
+        player_name: "You",
+        action,
+        amount: action === "raise" ? raiseAmount : 0,
+        agent_name: "Player",
+        reason: "You chose this action.",
+      };
+      await replayActions([userAction, ...nextGame.bot_actions], { includeInLog: nextGame.bot_actions });
       setGameResponse(nextGame);
-      setVisualActions([
-        {
-          id: `p0-${Date.now()}-${action}`,
-          player_id: "p0",
-          player_name: "You",
-          action,
-          amount: action === "raise" ? raiseAmount : 0,
-        },
-        ...toVisualActions(nextGame.bot_actions),
-      ]);
-      setBotHistory((previous) => [...nextGame.bot_actions, ...previous].slice(0, 8));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Action failed");
     } finally {
       setLoading(false);
     }
+  }
+
+  async function replayActions(
+    actions: BotAction[],
+    options: { includeInLog?: BotAction[] } = {},
+  ) {
+    if (!actions.length) return;
+
+    setReplaying(true);
+    const loggable = options.includeInLog ?? actions;
+    for (const action of actions) {
+      setVisualActions(toVisualActions([action]));
+      if (loggable.includes(action)) {
+        setBotHistory((previous) => [action, ...previous].slice(0, 10));
+      }
+      await sleep(ACTION_REPLAY_MS);
+    }
+    setVisualActions([]);
+    setReplaying(false);
   }
 
   const tableStatus = useMemo(() => {
@@ -96,10 +115,11 @@ export function App() {
         .join(", ");
       return `${names || "Winner"} takes the pot`;
     }
+    if (replaying) return "Action is playing out";
     if (game.current_player_id === "p0") return "Your decision";
     const current = game.players.find((player) => player.id === game.current_player_id);
     return `${current?.name ?? "Opponent"} is thinking`;
-  }, [game]);
+  }, [game, replaying]);
 
   return (
     <main className="app-shell">
@@ -132,7 +152,7 @@ export function App() {
           <div className="poker-table">
             <div className="board-row" aria-label="Community cards">
               {Array.from({ length: 5 }).map((_, index) => (
-                <CardView key={index} card={game?.board[index]} />
+                <CardView key={game?.board[index] ?? `board-${index}`} card={game?.board[index]} />
               ))}
             </div>
             <div className="pot-display">
@@ -149,6 +169,7 @@ export function App() {
           <div>
             <p className="status-label">Table Status</p>
             <strong>{tableStatus}</strong>
+            {replaying && <p className="replay-text">Letting the table play through each decision...</p>}
             {error && <p className="error-text">{error}</p>}
           </div>
           <div className="actions">
@@ -215,7 +236,11 @@ function PlayerSeat({
       </div>
       <div className="hole-cards">
         {[0, 1].map((index) => (
-          <CardView key={index} card={player.hole_cards[index]} hidden={!player.hole_cards[index]} />
+          <CardView
+            key={player.hole_cards[index] ?? `${player.id}-${index}`}
+            card={player.hole_cards[index]}
+            hidden={!player.hole_cards[index]}
+          />
         ))}
       </div>
       <div className="seat-footer">
@@ -381,6 +406,10 @@ function toVisualActions(actions: BotAction[]): VisualAction[] {
     action: action.action,
     amount: action.amount,
   }));
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 type HandLesson = {
