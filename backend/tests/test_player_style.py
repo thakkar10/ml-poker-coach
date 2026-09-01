@@ -35,8 +35,8 @@ def test_analyzer_classifies_loose_passive_caller() -> None:
 
     assert review.style == "Loose Passive"
     assert review.call_rate == 1
-    assert any("equity was below" in leak for leak in review.leaks)
-    assert any("Call less often" in step for step in review.next_steps)
+    assert any("too expensive" in leak for leak in review.leaks)
+    assert any("calling less" in step for step in review.next_steps)
 
 
 def test_analyzer_flags_overfolding() -> None:

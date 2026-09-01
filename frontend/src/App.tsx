@@ -216,7 +216,7 @@ export function App() {
       </section>
 
       <aside className="side-panel">
-        <CoachPanel coach={coach} />
+        <LiveStatsPanel coach={coach} />
         {playerReview && <PlayerReviewPanel review={playerReview} />}
         <HandLessonPanel lesson={handLesson} />
         <HistoryPanel botHistory={botHistory} />
@@ -294,43 +294,34 @@ function CardView({ card, hidden = false }: { card?: string; hidden?: boolean })
   );
 }
 
-function CoachPanel({ coach }: { coach: Coach | null }) {
+function LiveStatsPanel({ coach }: { coach: Coach | null }) {
   return (
     <section className="panel coach-panel">
       <div className="panel-title">
         <Brain size={20} />
-        <h2>AI Coach</h2>
+        <h2>Live Stats</h2>
       </div>
       {coach ? (
         <>
           <div className="recommendation">
-            <span>Recommended Action</span>
-            <strong>
-              {coach.action}
-              {coach.amount > 0 ? ` $${coach.amount}` : ""}
-            </strong>
+            <span>Hand situation</span>
+            <strong>{coach.equity > coach.pot_odds ? "Playable" : "Risky"}</strong>
           </div>
           <MetricBar label="Equity" value={coach.equity} />
           <MetricBar label="Pot Odds" value={coach.pot_odds} />
-          <MetricBar label="Confidence" value={coach.confidence} />
+          <MetricBar label="Extra Safety" value={Math.max(0, coach.equity - coach.pot_odds)} />
           <div className="stat-explainer">
             <p>
-              <strong>Equity</strong> is how often your hand is expected to win if the unknown cards are dealt many
-              times.
+              <strong>Equity</strong> means your estimated chance to win this hand.
             </p>
             <p>
-              <strong>Pot odds</strong> is the break-even price to call. If equity is higher than pot odds, calling
-              can be profitable.
+              <strong>Pot odds</strong> means the minimum chance you need for a call to make sense.
             </p>
+            <p>The app saves your choice and reviews your play after the hand.</p>
           </div>
-          <ul className="reason-list">
-            {coach.reasons.map((reason) => (
-              <li key={reason}>{reason}</li>
-            ))}
-          </ul>
         </>
       ) : (
-        <p className="empty-state">Coach advice appears when it is your turn to act.</p>
+        <p className="empty-state">Live stats appear when it is your turn to act.</p>
       )}
     </section>
   );
@@ -341,7 +332,7 @@ function PlayerReviewPanel({ review }: { review: PlayerReview }) {
     <section className="panel review-panel">
       <div className="panel-title">
         <TrendingUp size={20} />
-        <h2>Style Review</h2>
+        <h2>After-Hand Review</h2>
       </div>
       <div className="review-summary">
         <span>Your current style</span>
@@ -352,11 +343,11 @@ function PlayerReviewPanel({ review }: { review: PlayerReview }) {
         <MiniMetric label="Fold" value={review.fold_rate} />
         <MiniMetric label="Call/Check" value={review.call_rate} />
         <MiniMetric label="Raise" value={review.raise_rate} />
-        <MiniMetric label="Coach Match" value={review.coach_alignment} />
+        <MiniMetric label="Matched Guide" value={review.coach_alignment} />
       </div>
-      <ReviewList title="Leaks to fix" items={review.leaks} />
-      <ReviewList title="Strengths" items={review.strengths} />
-      <ReviewList title="Next steps" items={review.next_steps} />
+      <ReviewList title="What to improve" items={review.leaks} />
+      <ReviewList title="What went well" items={review.strengths} />
+      <ReviewList title="Try this next" items={review.next_steps} />
     </section>
   );
 }

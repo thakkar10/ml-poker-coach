@@ -11,8 +11,7 @@ The web UI is the first playable product surface for ML Poker Coach.
 - Pot and street display.
 - Fold, check/call, and raise controls.
 - Raise slider.
-- AI coach recommendation panel.
-- Equity, pot odds, and confidence bars.
+- Simple live stats panel with equity, pot odds, and extra safety.
 - Bot action history panel.
 - Animated chip bursts when a player calls or raises.
 - Folded-seat treatment with dimmed cards.
@@ -45,7 +44,7 @@ Open app
 New hand starts automatically
     |
     v
-Coach recommends an action
+Simple live stats appear
     |
     v
 User folds, checks/calls, or raises
@@ -54,7 +53,7 @@ User folds, checks/calls, or raises
 Bots act automatically
     |
     v
-Updated table and coach advice render
+Updated table and post-hand coaching render
 ```
 
 ## Design Direction
@@ -65,5 +64,5 @@ The UI is intentionally built as a poker table first, not a generic dashboard. T
 
 - Browser state is not persisted after refresh.
 - The backend stores games in memory.
-- The first UI does not yet include card-dealing animations.
+- Card-dealing animations are basic and will become richer over time.
 - Hand review is basic and will become richer after the evaluation layer exists.

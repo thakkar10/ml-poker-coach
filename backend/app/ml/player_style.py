@@ -62,7 +62,7 @@ class PlayerStyleAnalyzer:
         if not decisions:
             return StyleReview(
                 style="Not enough data",
-                summary="Play a few decisions to generate a coaching review.",
+                summary="Play a few hands first. Then the coach can explain your habits.",
                 decisions=0,
                 fold_rate=0,
                 call_rate=0,
@@ -71,7 +71,7 @@ class PlayerStyleAnalyzer:
                 avg_equity_edge=0,
                 leaks=[],
                 strengths=[],
-                next_steps=["Play more hands so the coach can learn your decision patterns."],
+                next_steps=["Play more hands so the coach can learn how you usually make decisions."],
             )
 
         total = len(decisions)
@@ -143,13 +143,13 @@ class PlayerStyleAnalyzer:
         ]
 
         if bad_calls:
-            leaks.append("You called in spots where your equity was below the price of calling.")
+            leaks.append("You called when the math said the call was probably too expensive.")
         if missed_value:
-            leaks.append("You passed up some raise spots where the coach saw a clear equity edge.")
+            leaks.append("You had some strong spots where raising may have won more chips.")
         if overfolds:
-            leaks.append("You folded some hands that had enough equity to continue profitably.")
+            leaks.append("You folded some hands that were probably good enough to keep playing.")
         if not leaks:
-            leaks.append("No major leak detected yet, but the sample is still small.")
+            leaks.append("No big issue yet. Play more hands so the coach can be more sure.")
         return leaks
 
     def _detect_strengths(
@@ -167,39 +167,39 @@ class PlayerStyleAnalyzer:
         ]
 
         if coach_alignment >= 0.65:
-            strengths.append("You often chose the same action as the strategy coach.")
+            strengths.append("Your choices often matched the coach's reference strategy.")
         if avg_edge >= 0:
-            strengths.append("On average, you entered decisions with equity at or above the required pot odds.")
+            strengths.append("You often played hands where your winning chance was worth the price.")
         if raise_rate > 0.18:
-            strengths.append("You showed willingness to raise instead of only calling.")
+            strengths.append("You were willing to raise instead of only calling.")
         if good_folds:
-            strengths.append("You avoided at least one low-equity call.")
+            strengths.append("You avoided at least one bad call.")
         if not strengths:
-            strengths.append("The coach needs more hands to identify reliable strengths.")
+            strengths.append("The coach needs more hands to find a clear strength.")
         return strengths
 
     def _next_steps(self, style: str, leaks: list[str]) -> list[str]:
         steps: list[str] = []
         if "Loose Passive" in style or "Passive" in style:
-            steps.append("Call less often with weak hands; either fold bad prices or raise strong edges.")
+            steps.append("Try calling less with weak hands. Fold bad prices and save chips.")
         if "Aggressive" in style:
-            steps.append("Keep pressure high, but check whether raises are backed by equity and pot odds.")
+            steps.append("Keep pressure on, but make sure your raises have a good reason.")
         if "Tight" in style:
-            steps.append("Look for profitable call or raise spots instead of folding every uncomfortable hand.")
+            steps.append("Do not fold every scary spot. Some hands are worth continuing.")
         if any("price of calling" in leak for leak in leaks):
-            steps.append("Before calling, compare equity to pot odds. Equity should usually be higher.")
+            steps.append("Before calling, compare your win chance to the cost of the call.")
         if any("raise spots" in leak for leak in leaks):
-            steps.append("When equity is far above pot odds, consider raising for value instead of calling.")
+            steps.append("When your hand is clearly strong, think about raising instead of just calling.")
         if not steps:
-            steps.append("Play more hands so the coach can build a more confident style profile.")
+            steps.append("Play more hands so the coach can give a stronger review.")
         return steps
 
     def _summary(self, style: str, coach_alignment: float, avg_edge: float) -> str:
-        alignment = "high" if coach_alignment >= 0.65 else "moderate" if coach_alignment >= 0.40 else "low"
-        edge_text = "positive" if avg_edge >= 0 else "negative"
+        alignment = "often" if coach_alignment >= 0.65 else "sometimes" if coach_alignment >= 0.40 else "rarely"
+        edge_text = "usually worth the price" if avg_edge >= 0 else "often a little too expensive"
         return (
-            f"Your current profile looks like {style}. Coach alignment is {alignment}, "
-            f"and your average equity edge is {edge_text} across reviewed decisions."
+            f"Your current style looks like {style}. You {alignment} matched the coach's reference strategy, "
+            f"and your calls or raises were {edge_text}."
         )
 
 

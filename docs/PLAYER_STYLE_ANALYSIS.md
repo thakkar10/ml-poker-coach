@@ -4,7 +4,7 @@ Player style analysis is the first ML-facing coaching feature in ML Poker Coach.
 
 ## Product Idea
 
-The live coach helps with one decision at a time. The style analyzer looks across the user's decisions and answers a bigger question:
+During a hand, the app shows simple live stats. After the hand, the style analyzer looks across the user's decisions and answers a bigger question:
 
 ```text
 How do you tend to play, and what should you improve?
@@ -16,7 +16,7 @@ Each user decision captures:
 
 - Street: preflop, flop, turn, or river.
 - User action: fold, check, call, or raise.
-- Coach recommendation at that moment.
+- Reference strategy action at that moment.
 - Equity estimate.
 - Pot odds.
 - Coach confidence.
@@ -31,7 +31,7 @@ The v0 analyzer is a transparent statistical classifier. It computes:
 - Fold rate.
 - Call/check rate.
 - Raise rate.
-- Coach alignment rate.
+- Guide match rate.
 - Average equity edge.
 
 Then it classifies the user style:
@@ -51,9 +51,9 @@ The review returns:
 
 - Playing style.
 - Plain-English summary.
-- Strengths.
-- Leaks to fix.
-- Next-step coaching advice.
+- What went well.
+- What to improve.
+- Clear next-step coaching advice.
 - Decision log for future hand review.
 
 ## Why This Is ML-Ready
