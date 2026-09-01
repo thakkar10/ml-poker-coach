@@ -3,7 +3,7 @@ import { BookOpen, Brain, CircleDollarSign, History, Loader2, RotateCcw, Trendin
 import { applyAction, BotAction, Coach, createGame, GameResponse, getGameReview, Player, PlayerReview } from "./api";
 
 const seatPositions = ["seat-user", "seat-left", "seat-top", "seat-right"];
-const ACTION_REPLAY_MS = 1250;
+const ACTION_REPLAY_MS = 1450;
 
 type VisualAction = Pick<BotAction, "player_id" | "player_name" | "action" | "amount"> & {
   id: string;
@@ -163,13 +163,20 @@ export function App() {
               showdownLabel={game.showdown[player.id]}
               lastAction={latestActions.get(player.id)}
               isActing={actingPlayerIds.has(player.id)}
+              isWinner={game.winners.includes(player.id)}
+              isShowdown={game.street === "complete"}
             />
           ))}
 
           <div className="poker-table">
             <div className="board-row" aria-label="Community cards">
               {Array.from({ length: 5 }).map((_, index) => (
-                <CardView key={game?.board[index] ?? `board-${index}`} card={game?.board[index]} />
+                <CardView
+                  key={game?.board[index] ?? `board-${index}`}
+                  card={game?.board[index]}
+                  variant="board"
+                  delayIndex={index}
+                />
               ))}
             </div>
             <div className="pot-display">
@@ -179,6 +186,7 @@ export function App() {
             <div className="street-pill">{game?.street ?? "loading"}</div>
           </div>
           <ChipBursts actions={visualActions} />
+          {game?.street === "complete" && <PotAward winnerId={game.winners[0]} />}
           <RecentActions actions={botHistory.slice(0, 3)} />
         </div>
 
@@ -233,6 +241,8 @@ function PlayerSeat({
   showdownLabel,
   lastAction,
   isActing,
+  isWinner,
+  isShowdown,
 }: {
   player: Player;
   position: string;
@@ -241,13 +251,16 @@ function PlayerSeat({
   showdownLabel?: string;
   lastAction?: BotAction;
   isActing: boolean;
+  isWinner: boolean;
+  isShowdown: boolean;
 }) {
   return (
     <article
       className={`player-seat ${position} ${isCurrent ? "is-current" : ""} ${
         player.folded ? "is-folded" : ""
-      } ${isActing ? "is-acting" : ""}`}
+      } ${isActing ? "is-acting" : ""} ${isWinner ? "is-winner" : ""} ${player.all_in ? "is-all-in" : ""}`}
     >
+      {isCurrent && <div className="action-timer" key={`${player.id}-${player.current_bet}`} />}
       <div className="seat-meta">
         <strong>{player.name}</strong>
         <span>${player.stack}</span>
@@ -258,13 +271,16 @@ function PlayerSeat({
             key={player.hole_cards[index] ?? `${player.id}-${index}`}
             card={player.hole_cards[index]}
             hidden={!player.hole_cards[index]}
+            variant={isShowdown && !isUser ? "showdown" : "hole"}
+            delayIndex={index}
           />
         ))}
       </div>
       <div className="seat-footer">
-        <span>{player.folded ? "Folded" : isUser ? "Hero" : "AI Opponent"}</span>
+        <span>{player.folded ? "Folded" : player.all_in ? "All In" : isUser ? "Hero" : "AI Opponent"}</span>
         {player.current_bet > 0 && <b>Bet ${player.current_bet}</b>}
       </div>
+      {player.all_in && <p className="all-in-badge">All in</p>}
       {lastAction && (
         <p className={`action-badge ${lastAction.action === "fold" ? "fold-action" : ""}`}>
           Last move: {lastAction.action}
@@ -276,9 +292,19 @@ function PlayerSeat({
   );
 }
 
-function CardView({ card, hidden = false }: { card?: string; hidden?: boolean }) {
+function CardView({
+  card,
+  hidden = false,
+  variant = "hole",
+  delayIndex = 0,
+}: {
+  card?: string;
+  hidden?: boolean;
+  variant?: "hole" | "board" | "showdown";
+  delayIndex?: number;
+}) {
   if (!card || hidden) {
-    return <div className="card card-back" aria-label="Hidden card" />;
+    return <div className="card card-back" aria-label="Hidden card" style={{ animationDelay: `${delayIndex * 90}ms` }} />;
   }
 
   const suit = card.slice(1);
@@ -287,7 +313,11 @@ function CardView({ card, hidden = false }: { card?: string; hidden?: boolean })
   const red = suit === "h" || suit === "d";
 
   return (
-    <div className={`card ${red ? "red" : "black"}`} aria-label={`${rank}${suitSymbol}`}>
+    <div
+      className={`card ${red ? "red" : "black"} card-${variant}`}
+      aria-label={`${rank}${suitSymbol}`}
+      style={{ animationDelay: `${delayIndex * 110}ms` }}
+    >
       <span>{rank}</span>
       <strong>{suitSymbol}</strong>
     </div>
@@ -435,6 +465,19 @@ function ChipBursts({ actions }: { actions: VisualAction[] }) {
           <span />
         </div>
       ))}
+    </div>
+  );
+}
+
+function PotAward({ winnerId }: { winnerId?: string }) {
+  if (!winnerId) return null;
+
+  return (
+    <div className={`pot-award to-${winnerId}`} aria-hidden="true">
+      <span />
+      <span />
+      <span />
+      <span />
     </div>
   );
 }

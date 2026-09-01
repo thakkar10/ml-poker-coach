@@ -16,7 +16,10 @@ The web UI is the first playable product surface for ML Poker Coach.
 - Animated chip bursts when a player calls or raises.
 - Folded-seat treatment with dimmed cards.
 - Current-player pulse.
+- Action timer on the current player's seat.
 - Action flash and latest-move badges when bots act.
+- Pot-award animation and winner glow after showdown.
+- Staggered board-card reveal and showdown flips.
 
 ## How It Connects
 
