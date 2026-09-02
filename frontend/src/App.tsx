@@ -30,6 +30,7 @@ export function App() {
   const [visualActions, setVisualActions] = useState<VisualAction[]>([]);
   const [playerReview, setPlayerReview] = useState<PlayerReview | null>(null);
   const [reviewDismissed, setReviewDismissed] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const game = gameResponse?.game ?? null;
   const coach = gameResponse?.coach ?? null;
@@ -45,7 +46,18 @@ export function App() {
   const canBet = Boolean(canAct && legalDetails?.can_bet);
   const canAggressiveAction = canRaise || canBet;
   const canAllIn = Boolean(canAct && legalDetails?.can_all_in);
-  const passiveLabel = legalDetails?.can_check ? "Check" : `Call $${toCall}`;
+  const allInIsExactCall = Boolean(
+    legalDetails?.can_call &&
+      legalDetails.can_all_in &&
+      legalDetails.call_amount === legalDetails.all_in_amount &&
+      !legalDetails.can_raise &&
+      !legalDetails.can_bet,
+  );
+  const passiveLabel = legalDetails?.can_check
+    ? "Check"
+    : allInIsExactCall
+      ? `Call $${toCall} - All In`
+      : `Call $${toCall}`;
   const aggressiveLabel = canAggressiveAction
     ? (game?.current_bet ?? 0) > 0
       ? `Raise to $${raiseAmount}`
@@ -63,21 +75,23 @@ export function App() {
       { label: "All In", amount: stack + alreadyCommitted, allIn: true },
     ];
 
-    return sizes.map((size) => ({
-      ...size,
-      amount: clampBetSize(size.amount, minRaise, maxRaise),
-    }));
-  }, [game?.pot, maxRaise, minRaise, user?.current_bet, user?.stack]);
+    return sizes
+      .filter((size) => !size.allIn || !allInIsExactCall)
+      .map((size) => ({
+        ...size,
+        amount: clampBetSize(size.amount, minRaise, maxRaise),
+      }));
+  }, [allInIsExactCall, game?.pot, maxRaise, minRaise, user?.current_bet, user?.stack]);
   const handLesson = useMemo(() => explainStartingHand(user?.hole_cards ?? []), [user?.hole_cards]);
-  const latestActions = useMemo(() => {
-    const actions = new Map<string, BotAction>();
-    for (const action of botHistory) {
+  const visibleActions = useMemo(() => {
+    const actions = new Map<string, VisualAction>();
+    for (const action of visualActions) {
       if (!actions.has(action.player_id)) {
         actions.set(action.player_id, action);
       }
     }
     return actions;
-  }, [botHistory]);
+  }, [visualActions]);
   const actingPlayerIds = useMemo(
     () => new Set(visualActions.map((action) => action.player_id)),
     [visualActions],
@@ -129,7 +143,14 @@ export function App() {
         player_id: "p0",
         player_name: "You",
         action,
-        amount: action === "raise" || action === "bet" ? raiseAmount : action === "all_in" ? (legalDetails?.all_in_amount ?? 0) : 0,
+        amount:
+          action === "raise" || action === "bet"
+            ? raiseAmount
+            : action === "all_in"
+              ? (legalDetails?.all_in_amount ?? 0)
+              : action === "call"
+                ? toCall
+                : 0,
         agent_name: "Player",
         reason: "You chose this action.",
       };
@@ -194,8 +215,8 @@ export function App() {
       <section className="game-surface" aria-label="Poker table">
         <header className="top-bar">
           <div>
-            <p className="eyebrow">NL Hold'em | $10 / $20 | 6 Max</p>
-            <h1>Texas Hold'em Strategy Table</h1>
+            <p className="eyebrow">NL Hold'em · $10 / $20 · 6 Max</p>
+            <h1>Texas Hold'em</h1>
           </div>
           <div className="table-tools" aria-label="Table controls">
             <button className="tool-button" type="button" aria-label="Sound effects">
@@ -221,7 +242,7 @@ export function App() {
               isUser={player.id === "p0"}
               tableRole={tableRoleForPlayer(game, player.id)}
               showdownLabel={game.showdown[player.id]}
-              lastAction={latestActions.get(player.id)}
+              lastAction={visibleActions.get(player.id)}
               isActing={actingPlayerIds.has(player.id)}
               isWinner={game.winners.includes(player.id)}
               isShowdown={game.street === "complete"}
@@ -258,13 +279,12 @@ export function App() {
         </div>
 
         <section className="action-dock" aria-label="Player actions">
-          <div>
-            <p className="status-label">Table Status</p>
-            <strong>{tableStatus}</strong>
-            {replaying && <p className="replay-text">Letting the table play through each decision...</p>}
-            {error && <p className="error-text">{error}</p>}
-          </div>
           <div className="bet-console">
+            <div className="compact-status">
+              <strong>{tableStatus}</strong>
+              {replaying && <span>Table action playing...</span>}
+              {error && <span className="error-text">{error}</span>}
+            </div>
             <div className="quick-bets" aria-label="Quick bet sizes">
               {quickBetSizes.map((size) => (
                 <button
@@ -287,7 +307,7 @@ export function App() {
                 step="10"
                 value={raiseAmount}
                 onChange={(event) => setRaiseAmount(clampBetSize(Number(event.target.value), minRaise, maxRaise))}
-                disabled={!canRaise || loading}
+                disabled={!canAggressiveAction || loading}
               />
               <input
                 type="range"
@@ -296,19 +316,21 @@ export function App() {
                 step="10"
                 value={raiseAmount}
                 onChange={(event) => setRaiseAmount(Number(event.target.value))}
-                disabled={!canRaise || loading}
+                disabled={!canAggressiveAction || loading}
               />
             </label>
             <div className="actions">
               <button className="fold-button" onClick={() => chooseAction("fold")} disabled={!canAct || !game?.legal_actions.includes("fold") || loading}>
                 Fold
               </button>
-              <button onClick={() => chooseAction(game?.legal_actions.includes("check") ? "check" : "call")} disabled={!canAct || loading}>
+              <button onClick={() => chooseAction(legalDetails?.can_check ? "check" : "call")} disabled={!canAct || (!legalDetails?.can_check && !legalDetails?.can_call) || loading}>
                 {passiveLabel}
               </button>
-              <button className="raise-button" onClick={() => chooseAction(game?.legal_actions.includes("bet") ? "bet" : "raise")} disabled={!canAggressiveAction || loading}>
-                {aggressiveLabel}
-              </button>
+              {canAggressiveAction && (
+                <button className="raise-button" onClick={() => chooseAction(game?.legal_actions.includes("bet") ? "bet" : "raise")} disabled={loading}>
+                  {aggressiveLabel}
+                </button>
+              )}
             </div>
           </div>
         </section>
@@ -317,7 +339,11 @@ export function App() {
       <aside className="side-panel">
         <LiveStatsPanel coach={coach} />
         <HandLessonPanel lesson={handLesson} />
-        <HistoryPanel botHistory={botHistory} />
+        <button className="history-toggle" type="button" onClick={() => setHistoryOpen((open) => !open)}>
+          <History size={16} />
+          History
+        </button>
+        {historyOpen && <HistoryPanel botHistory={botHistory} />}
       </aside>
       {playerReview && !reviewDismissed && (
         <ReviewModal
@@ -385,7 +411,7 @@ function PlayerSeat({
   isUser: boolean;
   tableRole?: string;
   showdownLabel?: string;
-  lastAction?: BotAction;
+  lastAction?: VisualAction;
   isActing: boolean;
   isWinner: boolean;
   isShowdown: boolean;
@@ -403,7 +429,7 @@ function PlayerSeat({
       </div>
       <div className="seat-meta">
         <strong>{player.name}</strong>
-        <span>${player.stack}</span>
+        <span>{player.all_in ? "ALL IN" : `$${player.stack}`}</span>
       </div>
       <div className="hole-cards">
         {[0, 1].map((index) => (
@@ -418,12 +444,12 @@ function PlayerSeat({
       </div>
       <div className="seat-footer">
         <span>{player.folded ? "Folded" : player.all_in ? "All In" : isUser ? "Hero" : "AI Opponent"}</span>
-        {player.current_bet > 0 && <b>Committed ${player.current_bet}</b>}
+        {player.total_committed > 0 && <b>${player.total_committed} committed</b>}
       </div>
       {player.all_in && <p className="all-in-badge">All in</p>}
       {lastAction && (
         <p className={`action-badge ${lastAction.action === "fold" ? "fold-action" : ""}`}>
-          Last move: {lastAction.action}
+          {lastAction.action}
           {lastAction.amount > 0 ? ` $${lastAction.amount}` : ""}
         </p>
       )}
@@ -493,12 +519,12 @@ function LiveStatsPanel({ coach }: { coach: Coach | null }) {
       {coach ? (
         <>
           <div className="recommendation">
-            <span>Hand situation</span>
-            <strong>{coach.equity > coach.pot_odds ? "Playable" : "Risky"}</strong>
+            <span>Decision Quality</span>
+            <strong>{coach.equity > coach.pot_odds ? "Favorable" : "Marginal"}</strong>
           </div>
           <MetricBar label="Equity" value={coach.equity} />
           <MetricBar label="Pot Odds" value={coach.pot_odds} />
-          <MetricBar label="Extra Safety" value={Math.max(0, coach.equity - coach.pot_odds)} />
+          <MetricBar label="Equity Edge" value={Math.max(0, coach.equity - coach.pot_odds)} />
           <div className="stat-explainer">
             <p>
               <strong>Equity</strong> means your estimated chance to win this hand.
@@ -608,7 +634,7 @@ function RecentActions({ actions }: { actions: BotAction[] }) {
 }
 
 function ChipBursts({ actions }: { actions: VisualAction[] }) {
-  const moneyActions = actions.filter((action) => action.action === "call" || action.action === "raise");
+  const moneyActions = actions.filter((action) => ["all_in", "bet", "call", "raise"].includes(action.action));
   if (!moneyActions.length) return null;
 
   return (
