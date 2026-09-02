@@ -12,6 +12,8 @@ class BotActionLog:
     player_name: str
     agent_name: str
     action: AgentAction
+    state_before: dict
+    state_after: dict
 
 
 class TableRunner:
@@ -36,6 +38,7 @@ class TableRunner:
             if agent is None:
                 return logs
 
+            state_before = game.to_public_state(viewer_id=user_player_id)
             selected_action = agent.choose_action(game, player_id=player.id)
             if selected_action.action not in game.legal_actions(player.id):
                 raise ValueError(
@@ -43,12 +46,15 @@ class TableRunner:
                 )
 
             game.apply_action(selected_action.action, selected_action.amount)
+            state_after = game.to_public_state(viewer_id=user_player_id)
             logs.append(
                 BotActionLog(
                     player_id=player.id,
                     player_name=player.name,
                     agent_name=agent.name,
                     action=selected_action,
+                    state_before=state_before,
+                    state_after=state_after,
                 )
             )
 

@@ -102,6 +102,7 @@ export function App() {
       }));
   }, [allInIsExactCall, game?.pot, maxRaise, minRaise, user?.current_bet, user?.stack]);
   const handLesson = useMemo(() => explainStartingHand(user?.hole_cards ?? []), [user?.hole_cards]);
+  const communityCards = useMemo(() => visibleCommunityCards(game), [game]);
   const visibleActions = useMemo(() => {
     const actions = new Map<string, VisualAction>();
     for (const action of visualActions) {
@@ -159,7 +160,7 @@ export function App() {
     setError(null);
     try {
       const nextGame = await createGame();
-      setGameResponse(nextGame);
+      setGameResponse(nextGame.bot_actions[0]?.state_before ? withGameState(nextGame, nextGame.bot_actions[0].state_before) : nextGame);
       setBotHistory([]);
       setPlayerReview(null);
       setReviewDismissed(false);
@@ -169,6 +170,7 @@ export function App() {
       setVisualActions([]);
       consumedVisualEventIds.current.clear();
       await replayActions(nextGame.bot_actions);
+      setGameResponse(nextGame);
       setRaiseAmount(80);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start game");
@@ -240,6 +242,9 @@ export function App() {
         continue;
       }
       consumedVisualEventIds.current.add(visualAction.eventId);
+      if (action.state_before) {
+        await syncVisualGameState(action.state_before);
+      }
       if (!options.immediatePlayerIds?.has(action.player_id)) {
         setThinkingPlayerId(action.player_id);
         await sleep(getActionThinkingDelay(action.action));
@@ -251,6 +256,9 @@ export function App() {
       }
       await sleep(getActionVisibleDuration(action.action));
       setVisualActions([]);
+      if (action.state_after) {
+        await syncVisualGameState(action.state_after);
+      }
       await sleep(POST_ACTION_SETTLE_MS);
     }
     setVisualActions([]);
@@ -261,6 +269,17 @@ export function App() {
   async function openReviewNow(gameId: string) {
     setReviewCountdown(null);
     await loadReview(gameId);
+  }
+
+  async function syncVisualGameState(nextState: GameResponse["game"]) {
+    let shouldPauseForBoardReveal = false;
+    setGameResponse((current) => {
+      shouldPauseForBoardReveal = Boolean(current && hasNewCommunityCards(current.game, nextState));
+      return withGameState(current, nextState);
+    });
+    if (shouldPauseForBoardReveal) {
+      await sleep(950);
+    }
   }
 
   const tableStatus = useMemo(() => {
@@ -340,8 +359,8 @@ export function App() {
             <div className="board-row" aria-label="Community cards">
               {Array.from({ length: 5 }).map((_, index) => (
                 <CardView
-                  key={game?.board[index] ?? `board-${index}`}
-                  card={game?.board[index]}
+                  key={communityCards[index] ?? `board-${index}`}
+                  card={communityCards[index]}
                   variant="board"
                   delayIndex={index}
                 />
@@ -828,6 +847,37 @@ function calculateWinnerAmounts(game: GameResponse["game"] | null) {
   }
 
   return awards;
+}
+
+function withGameState(response: GameResponse | null, game: GameResponse["game"]): GameResponse {
+  return {
+    game,
+    coach: game.current_player_id === "p0" ? (response?.coach ?? null) : null,
+    bot_actions: response?.bot_actions ?? [],
+  };
+}
+
+function visibleCommunityCards(game: GameResponse["game"] | null) {
+  const cards = Array<string | undefined>(5).fill(undefined);
+  if (!game) return cards;
+
+  const visibleCount = visibleBoardCardCount(game.street);
+  game.board.slice(0, visibleCount).forEach((card, index) => {
+    cards[index] = card;
+  });
+  return cards;
+}
+
+function visibleBoardCardCount(street: string) {
+  if (street === "flop") return 3;
+  if (street === "turn") return 4;
+  if (street === "river" || street === "showdown" || street === "complete") return 5;
+  return 0;
+}
+
+function hasNewCommunityCards(previousGame: GameResponse["game"], nextGame: GameResponse["game"]) {
+  return visibleBoardCardCount(nextGame.street) > visibleBoardCardCount(previousGame.street)
+    || nextGame.board.length > previousGame.board.length;
 }
 
 function hasStreetAdvanced(previousGame: GameResponse["game"], nextGame: GameResponse["game"]) {

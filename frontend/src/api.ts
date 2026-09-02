@@ -61,6 +61,8 @@ export type BotAction = {
   action: string;
   amount: number;
   reason: string;
+  state_before?: GameState;
+  state_after?: GameState;
 };
 
 export type GameResponse = {

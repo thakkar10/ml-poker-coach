@@ -77,6 +77,32 @@ def test_apply_user_action_runs_bot_turns() -> None:
     assert isinstance(payload["bot_actions"], list)
 
 
+def test_bot_action_logs_include_authoritative_board_snapshots() -> None:
+    created = client.post(
+        "/api/game/new",
+        json={"player_names": ["You", "Tight Bot", "Aggressive Bot"], "seed": 103},
+    ).json()
+    game_id = created["game"]["id"]
+    action = "call" if "call" in created["game"]["legal_actions"] else "check"
+
+    response = client.post(
+        f"/api/game/{game_id}/action",
+        json={"action": action, "amount": 0},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    if not payload["bot_actions"]:
+        return
+
+    for bot_action in payload["bot_actions"]:
+        assert "state_before" in bot_action
+        assert "state_after" in bot_action
+        assert isinstance(bot_action["state_before"]["board"], list)
+        assert isinstance(bot_action["state_after"]["board"], list)
+        assert len(bot_action["state_after"]["board"]) >= len(bot_action["state_before"]["board"])
+
+
 def test_user_fold_allows_remaining_bots_to_finish_hand() -> None:
     created = client.post(
         "/api/game/new",

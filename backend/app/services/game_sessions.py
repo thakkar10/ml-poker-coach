@@ -107,6 +107,8 @@ def serialize_bot_logs(logs: list[BotActionLog]) -> list[dict[str, object]]:
             "action": log.action.action.value,
             "amount": log.action.amount,
             "reason": log.action.reason,
+            "state_before": log.state_before,
+            "state_after": log.state_after,
         }
         for log in logs
     ]
