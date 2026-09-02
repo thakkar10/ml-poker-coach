@@ -136,6 +136,9 @@ class PokerGame:
             "current_bet": self.current_bet,
             "board": [str(card) for card in self.board],
             "current_player_id": self.current_player.id if self.street != Street.COMPLETE else None,
+            "button_player_id": self.players[self.button_index].id,
+            "small_blind_player_id": self.players[self._small_blind_index()].id,
+            "big_blind_player_id": self.players[self._big_blind_index()].id,
             "legal_actions": [action.value for action in sorted(self.legal_actions(), key=lambda item: item.value)],
             "players": [
                 {

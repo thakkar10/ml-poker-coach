@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 class NewGameRequest(BaseModel):
     player_names: list[str] = Field(
-        default_factory=lambda: ["You", "Tight Bot", "Aggressive Bot", "Equity Bot"],
+        default_factory=lambda: ["HEET", "Stone Fox", "River Jay", "Nova", "Blaze", "Mira"],
         min_length=2,
         max_length=6,
     )

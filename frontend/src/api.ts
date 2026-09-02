@@ -24,6 +24,9 @@ export type GameState = {
   current_bet: number;
   board: string[];
   current_player_id: string | null;
+  button_player_id: string;
+  small_blind_player_id: string;
+  big_blind_player_id: string;
   legal_actions: string[];
   players: Player[];
   winners: string[];
@@ -75,7 +78,7 @@ export async function createGame(): Promise<GameResponse> {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      player_names: ["You", "Tight Bot", "Aggressive Bot", "Equity Bot"],
+      player_names: ["HEET", "Stone Fox", "River Jay", "Nova", "Blaze", "Mira"],
     }),
   });
   return readResponse(response);

@@ -1,9 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, Brain, CircleDollarSign, History, Loader2, RotateCcw, TrendingUp } from "lucide-react";
+import {
+  BookOpen,
+  Brain,
+  CircleDollarSign,
+  History,
+  Loader2,
+  RotateCcw,
+  Settings,
+  TrendingUp,
+  Volume2,
+} from "lucide-react";
 import { applyAction, BotAction, Coach, createGame, GameResponse, getGameReview, Player, PlayerReview } from "./api";
 
-const seatPositions = ["seat-user", "seat-left", "seat-top", "seat-right"];
-const ACTION_REPLAY_MS = 1450;
+const seatPositions = ["seat-user", "seat-lower-left", "seat-upper-left", "seat-top", "seat-upper-right", "seat-lower-right"];
+const ACTION_REPLAY_MS = 1750;
 
 type VisualAction = Pick<BotAction, "player_id" | "player_name" | "action" | "amount"> & {
   id: string;
@@ -23,6 +33,33 @@ export function App() {
   const coach = gameResponse?.coach ?? null;
   const user = game?.players[0] ?? null;
   const canAct = game?.current_player_id === "p0" && game.street !== "complete" && !replaying;
+  const toCall = user && game ? Math.max(0, game.current_bet - user.current_bet) : 0;
+  const maxRaise = user ? user.stack + user.current_bet : 1000;
+  const minRaise = game ? Math.min(maxRaise, Math.max(game.current_bet + 20, 40)) : 40;
+  const canRaise = Boolean(canAct && game?.legal_actions.includes("raise"));
+  const passiveLabel = game?.legal_actions.includes("check") ? "Check" : `Call $${toCall}`;
+  const aggressiveLabel = game?.legal_actions.includes("raise")
+    ? game.current_bet > 0
+      ? `Raise to $${raiseAmount}`
+      : `Bet $${raiseAmount}`
+    : "Raise";
+  const quickBetSizes = useMemo(() => {
+    const pot = game?.pot ?? 0;
+    const stack = user?.stack ?? 0;
+    const alreadyCommitted = user?.current_bet ?? 0;
+    const sizes = [
+      { label: "1/3 Pot", amount: Math.round(pot / 3) },
+      { label: "1/2 Pot", amount: Math.round(pot / 2) },
+      { label: "3/4 Pot", amount: Math.round((pot * 3) / 4) },
+      { label: "Pot", amount: pot },
+      { label: "All In", amount: stack + alreadyCommitted },
+    ];
+
+    return sizes.map((size) => ({
+      ...size,
+      amount: clampBetSize(size.amount, minRaise, maxRaise),
+    }));
+  }, [game?.pot, maxRaise, minRaise, user?.current_bet, user?.stack]);
   const handLesson = useMemo(() => explainStartingHand(user?.hole_cards ?? []), [user?.hole_cards]);
   const latestActions = useMemo(() => {
     const actions = new Map<string, BotAction>();
@@ -48,6 +85,10 @@ export function App() {
   useEffect(() => {
     void startNewGame();
   }, []);
+
+  useEffect(() => {
+    setRaiseAmount((current) => clampBetSize(current, minRaise, maxRaise));
+  }, [maxRaise, minRaise]);
 
   async function startNewGame() {
     setLoading(true);
@@ -143,13 +184,21 @@ export function App() {
       <section className="game-surface" aria-label="Poker table">
         <header className="top-bar">
           <div>
-            <p className="eyebrow">ML Poker Coach</p>
+            <p className="eyebrow">NL Hold'em | $10 / $20 | 6 Max</p>
             <h1>Texas Hold'em Strategy Table</h1>
           </div>
-          <button className="icon-button" onClick={startNewGame} disabled={loading} aria-label="Start new hand">
-            {loading ? <Loader2 className="spin" size={18} /> : <RotateCcw size={18} />}
-            New Hand
-          </button>
+          <div className="table-tools" aria-label="Table controls">
+            <button className="tool-button" type="button" aria-label="Sound effects">
+              <Volume2 size={17} />
+            </button>
+            <button className="tool-button" type="button" aria-label="Settings">
+              <Settings size={17} />
+            </button>
+            <button className="icon-button" onClick={startNewGame} disabled={loading} aria-label="Start new hand">
+              {loading ? <Loader2 className="spin" size={18} /> : <RotateCcw size={18} />}
+              New Hand
+            </button>
+          </div>
         </header>
 
         <div className="table-zone">
@@ -160,6 +209,7 @@ export function App() {
               position={seatPositions[index] ?? "seat-side"}
               isCurrent={game.current_player_id === player.id}
               isUser={player.id === "p0"}
+              tableRole={tableRoleForPlayer(game, player.id)}
               showdownLabel={game.showdown[player.id]}
               lastAction={latestActions.get(player.id)}
               isActing={actingPlayerIds.has(player.id)}
@@ -169,6 +219,18 @@ export function App() {
           ))}
 
           <div className="poker-table">
+            <div className="dealer-shoe" aria-hidden="true">DEALER</div>
+            {game?.players.map((player, index) => (
+              <BetStack
+                key={`bet-${player.id}`}
+                player={player}
+                position={seatPositions[index] ?? "seat-side"}
+              />
+            ))}
+            <div className="pot-display">
+              <CircleDollarSign size={20} />
+              Pot ${game?.pot ?? 0}
+            </div>
             <div className="board-row" aria-label="Community cards">
               {Array.from({ length: 5 }).map((_, index) => (
                 <CardView
@@ -178,10 +240,6 @@ export function App() {
                   delayIndex={index}
                 />
               ))}
-            </div>
-            <div className="pot-display">
-              <CircleDollarSign size={20} />
-              Pot ${game?.pot ?? 0}
             </div>
             <div className="street-pill">{game?.street ?? "loading"}</div>
           </div>
@@ -197,28 +255,52 @@ export function App() {
             {replaying && <p className="replay-text">Letting the table play through each decision...</p>}
             {error && <p className="error-text">{error}</p>}
           </div>
-          <div className="actions">
-            <button onClick={() => chooseAction("fold")} disabled={!canAct || !game?.legal_actions.includes("fold") || loading}>
-              Fold
-            </button>
-            <button onClick={() => chooseAction(game?.legal_actions.includes("check") ? "check" : "call")} disabled={!canAct || loading}>
-              {game?.legal_actions.includes("check") ? "Check" : "Call"}
-            </button>
+          <div className="bet-console">
+            <div className="quick-bets" aria-label="Quick bet sizes">
+              {quickBetSizes.map((size) => (
+                <button
+                  key={size.label}
+                  type="button"
+                  onClick={() => setRaiseAmount(size.amount)}
+                  disabled={!canRaise || loading}
+                >
+                  {size.label}
+                </button>
+              ))}
+            </div>
             <label className="raise-control">
-              <span>Raise to ${raiseAmount}</span>
+              <span>{game?.current_bet ? "Raise to" : "Bet"}</span>
+              <input
+                className="amount-input"
+                type="number"
+                min={minRaise}
+                max={maxRaise}
+                step="10"
+                value={raiseAmount}
+                onChange={(event) => setRaiseAmount(clampBetSize(Number(event.target.value), minRaise, maxRaise))}
+                disabled={!canRaise || loading}
+              />
               <input
                 type="range"
-                min="40"
-                max={Math.max(100, user?.stack ?? 1000)}
+                min={minRaise}
+                max={Math.max(minRaise, maxRaise)}
                 step="10"
                 value={raiseAmount}
                 onChange={(event) => setRaiseAmount(Number(event.target.value))}
-                disabled={!canAct || !game?.legal_actions.includes("raise") || loading}
+                disabled={!canRaise || loading}
               />
             </label>
-            <button onClick={() => chooseAction("raise")} disabled={!canAct || !game?.legal_actions.includes("raise") || loading}>
-              Raise
-            </button>
+            <div className="actions">
+              <button className="fold-button" onClick={() => chooseAction("fold")} disabled={!canAct || !game?.legal_actions.includes("fold") || loading}>
+                Fold
+              </button>
+              <button onClick={() => chooseAction(game?.legal_actions.includes("check") ? "check" : "call")} disabled={!canAct || loading}>
+                {passiveLabel}
+              </button>
+              <button className="raise-button" onClick={() => chooseAction("raise")} disabled={!canRaise || loading}>
+                {aggressiveLabel}
+              </button>
+            </div>
           </div>
         </section>
       </section>
@@ -238,6 +320,7 @@ function PlayerSeat({
   position,
   isCurrent,
   isUser,
+  tableRole,
   showdownLabel,
   lastAction,
   isActing,
@@ -248,6 +331,7 @@ function PlayerSeat({
   position: string;
   isCurrent: boolean;
   isUser: boolean;
+  tableRole?: string;
   showdownLabel?: string;
   lastAction?: BotAction;
   isActing: boolean;
@@ -261,6 +345,10 @@ function PlayerSeat({
       } ${isActing ? "is-acting" : ""} ${isWinner ? "is-winner" : ""} ${player.all_in ? "is-all-in" : ""}`}
     >
       {isCurrent && <div className="action-timer" key={`${player.id}-${player.current_bet}`} />}
+      <div className="avatar-wrap">
+        <div className="avatar" aria-hidden="true">{player.name.slice(0, 1)}</div>
+        {tableRole && <span className="table-marker">{tableRole}</span>}
+      </div>
       <div className="seat-meta">
         <strong>{player.name}</strong>
         <span>${player.stack}</span>
@@ -278,7 +366,7 @@ function PlayerSeat({
       </div>
       <div className="seat-footer">
         <span>{player.folded ? "Folded" : player.all_in ? "All In" : isUser ? "Hero" : "AI Opponent"}</span>
-        {player.current_bet > 0 && <b>Bet ${player.current_bet}</b>}
+        {player.current_bet > 0 && <b>Committed ${player.current_bet}</b>}
       </div>
       {player.all_in && <p className="all-in-badge">All in</p>}
       {lastAction && (
@@ -289,6 +377,21 @@ function PlayerSeat({
       )}
       {showdownLabel && <p className="showdown-label">{showdownLabel}</p>}
     </article>
+  );
+}
+
+function BetStack({ player, position }: { player: Player; position: string }) {
+  if (player.current_bet <= 0) return null;
+
+  return (
+    <div className={`bet-stack bet-${position}`} aria-label={`${player.name} has bet ${player.current_bet}`}>
+      <div className="mini-chips" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </div>
+      <strong>${player.current_bet}</strong>
+    </div>
   );
 }
 
@@ -310,11 +413,11 @@ function CardView({
   const suit = card.slice(1);
   const rank = card.slice(0, 1);
   const suitSymbol = suit === "s" ? "♠" : suit === "h" ? "♥" : suit === "d" ? "♦" : "♣";
-  const red = suit === "h" || suit === "d";
+  const suitClass = suit === "h" ? "heart" : suit === "d" ? "diamond" : suit === "c" ? "club" : "spade";
 
   return (
     <div
-      className={`card ${red ? "red" : "black"} card-${variant}`}
+      className={`card ${suitClass} card-${variant}`}
       aria-label={`${rank}${suitSymbol}`}
       style={{ animationDelay: `${delayIndex * 110}ms` }}
     >
@@ -505,6 +608,18 @@ function toVisualActions(actions: BotAction[]): VisualAction[] {
     action: action.action,
     amount: action.amount,
   }));
+}
+
+function clampBetSize(value: number, min: number, max: number) {
+  if (!Number.isFinite(value)) return min;
+  return Math.min(Math.max(Math.round(value / 10) * 10, min), Math.max(min, max));
+}
+
+function tableRoleForPlayer(game: GameResponse["game"], playerId: string) {
+  if (game.button_player_id === playerId) return "D";
+  if (game.small_blind_player_id === playerId) return "SB";
+  if (game.big_blind_player_id === playerId) return "BB";
+  return undefined;
 }
 
 function sleep(ms: number) {
