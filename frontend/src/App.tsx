@@ -245,7 +245,6 @@ export function App() {
           </div>
           <ChipBursts actions={visualActions} />
           {game?.street === "complete" && <PotAward winnerId={game.winners[0]} />}
-          <RecentActions actions={botHistory.slice(0, 3)} />
         </div>
 
         <section className="action-dock" aria-label="Player actions">
@@ -406,6 +405,10 @@ function CardView({
   variant?: "hole" | "board" | "showdown";
   delayIndex?: number;
 }) {
+  if (!card && variant === "board") {
+    return <div className="card card-empty" aria-label="Empty board card slot" />;
+  }
+
   if (!card || hidden) {
     return <div className="card card-back" aria-label="Hidden card" style={{ animationDelay: `${delayIndex * 90}ms` }} />;
   }
