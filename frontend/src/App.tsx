@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BookOpen,
   Brain,
@@ -14,7 +14,18 @@ import {
 import { applyAction, BotAction, Coach, createGame, GameResponse, getGameReview, Player, PlayerReview } from "./api";
 
 const seatPositions = ["seat-user", "seat-lower-left", "seat-upper-left", "seat-top", "seat-upper-right", "seat-lower-right"];
-const ACTION_REPLAY_MS = 1750;
+const ACTION_VISIBLE_MS = 1050;
+const POST_ACTION_SETTLE_MS = 360;
+const REVIEW_POT_AWARD_MS = 1800;
+const REVIEW_COUNTDOWN_SECONDS = 4;
+const ACTION_THINKING_DELAYS: Record<string, [number, number]> = {
+  check: [800, 1400],
+  fold: [900, 1600],
+  call: [1000, 1700],
+  bet: [1200, 2000],
+  raise: [1400, 2300],
+  all_in: [1500, 2500],
+};
 
 type VisualAction = Pick<BotAction, "player_id" | "player_name" | "action" | "amount"> & {
   id: string;
@@ -28,8 +39,11 @@ export function App() {
   const [replaying, setReplaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [visualActions, setVisualActions] = useState<VisualAction[]>([]);
+  const [thinkingPlayerId, setThinkingPlayerId] = useState<string | null>(null);
   const [playerReview, setPlayerReview] = useState<PlayerReview | null>(null);
   const [reviewDismissed, setReviewDismissed] = useState(false);
+  const [reviewCountdown, setReviewCountdown] = useState<number | null>(null);
+  const reviewScheduledGameId = useRef<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
 
   const game = gameResponse?.game ?? null;
@@ -96,13 +110,7 @@ export function App() {
     () => new Set(visualActions.map((action) => action.player_id)),
     [visualActions],
   );
-
-  useEffect(() => {
-    if (!visualActions.length) return;
-
-    const timeout = window.setTimeout(() => setVisualActions([]), ACTION_REPLAY_MS);
-    return () => window.clearTimeout(timeout);
-  }, [visualActions]);
+  const winnerAmounts = useMemo(() => calculateWinnerAmounts(game), [game]);
 
   useEffect(() => {
     void startNewGame();
@@ -111,6 +119,31 @@ export function App() {
   useEffect(() => {
     setRaiseAmount((current) => clampBetSize(current, minRaise, maxRaise));
   }, [maxRaise, minRaise]);
+
+  useEffect(() => {
+    if (!game || game.street !== "complete" || replaying || playerReview || reviewScheduledGameId.current === game.id) {
+      return;
+    }
+
+    reviewScheduledGameId.current = game.id;
+    setReviewCountdown(null);
+
+    const timers: number[] = [];
+    for (let secondsLeft = REVIEW_COUNTDOWN_SECONDS; secondsLeft >= 1; secondsLeft -= 1) {
+      const elapsed = REVIEW_POT_AWARD_MS + (REVIEW_COUNTDOWN_SECONDS - secondsLeft) * 1000;
+      timers.push(window.setTimeout(() => setReviewCountdown(secondsLeft), elapsed));
+    }
+    timers.push(
+      window.setTimeout(() => {
+        setReviewCountdown(null);
+        void loadReview(game.id);
+      }, REVIEW_POT_AWARD_MS + REVIEW_COUNTDOWN_SECONDS * 1000),
+    );
+
+    return () => {
+      timers.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, [game, playerReview, replaying]);
 
   async function startNewGame() {
     setLoading(true);
@@ -121,10 +154,10 @@ export function App() {
       setBotHistory([]);
       setPlayerReview(null);
       setReviewDismissed(false);
+      setReviewCountdown(null);
+      reviewScheduledGameId.current = null;
+      setThinkingPlayerId(null);
       await replayActions(nextGame.bot_actions);
-      if (nextGame.game.street === "complete") {
-        await loadReview(nextGame.game.id);
-      }
       setRaiseAmount(80);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start game");
@@ -155,10 +188,10 @@ export function App() {
         reason: "You chose this action.",
       };
       await replayActions([userAction, ...nextGame.bot_actions], { includeInLog: nextGame.bot_actions });
-      setGameResponse(nextGame);
-      if (nextGame.game.street === "complete") {
-        await loadReview(nextGame.game.id);
+      if (hasStreetAdvanced(game, nextGame.game)) {
+        await sleep(900);
       }
+      setGameResponse(nextGame);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Action failed");
     } finally {
@@ -185,14 +218,25 @@ export function App() {
     setReplaying(true);
     const loggable = options.includeInLog ?? actions;
     for (const action of actions) {
+      setThinkingPlayerId(action.player_id);
+      await sleep(getActionThinkingDelay(action.action));
+      setThinkingPlayerId(null);
       setVisualActions(toVisualActions([action]));
       if (loggable.includes(action)) {
         setBotHistory((previous) => [action, ...previous].slice(0, 10));
       }
-      await sleep(ACTION_REPLAY_MS);
+      await sleep(getActionVisibleDuration(action.action));
+      setVisualActions([]);
+      await sleep(POST_ACTION_SETTLE_MS);
     }
     setVisualActions([]);
+    setThinkingPlayerId(null);
     setReplaying(false);
+  }
+
+  async function openReviewNow(gameId: string) {
+    setReviewCountdown(null);
+    await loadReview(gameId);
   }
 
   const tableStatus = useMemo(() => {
@@ -204,11 +248,15 @@ export function App() {
         .join(", ");
       return `${names || "Winner"} takes the pot`;
     }
+    if (thinkingPlayerId) {
+      const thinkingPlayer = game.players.find((player) => player.id === thinkingPlayerId);
+      return `${thinkingPlayer?.name ?? "Opponent"} is thinking`;
+    }
     if (replaying) return "Action is playing out";
     if (game.current_player_id === "p0") return "Your decision";
     const current = game.players.find((player) => player.id === game.current_player_id);
     return `${current?.name ?? "Opponent"} is thinking`;
-  }, [game, replaying]);
+  }, [game, replaying, thinkingPlayerId]);
 
   return (
     <main className="app-shell">
@@ -238,14 +286,17 @@ export function App() {
               key={player.id}
               player={player}
               position={seatPositions[index] ?? "seat-side"}
-              isCurrent={game.current_player_id === player.id}
+              isCurrent={game.current_player_id === player.id && !replaying}
+              isThinking={thinkingPlayerId === player.id}
               isUser={player.id === "p0"}
               tableRole={tableRoleForPlayer(game, player.id)}
               showdownLabel={game.showdown[player.id]}
               lastAction={visibleActions.get(player.id)}
               isActing={actingPlayerIds.has(player.id)}
               isWinner={game.winners.includes(player.id)}
+              isLoser={game.street === "complete" && game.winners.length > 0 && !game.winners.includes(player.id)}
               isShowdown={game.street === "complete"}
+              winnings={winnerAmounts.get(player.id) ?? 0}
             />
           ))}
 
@@ -276,6 +327,14 @@ export function App() {
           </div>
           <ChipBursts actions={visualActions} />
           {game?.street === "complete" && <PotAward winnerId={game.winners[0]} />}
+          {game?.street === "complete" && !playerReview && (
+            <div className="review-countdown">
+              <strong>{reviewCountdown ? `Reviewing hand in ${reviewCountdown}...` : "Awarding the pot..."}</strong>
+              <button type="button" onClick={() => void openReviewNow(game.id)}>
+                Review Hand
+              </button>
+            </div>
+          )}
         </div>
 
         <section className="action-dock" aria-label="Player actions">
@@ -397,32 +456,40 @@ function PlayerSeat({
   player,
   position,
   isCurrent,
+  isThinking,
   isUser,
   tableRole,
   showdownLabel,
   lastAction,
   isActing,
   isWinner,
+  isLoser,
   isShowdown,
+  winnings,
 }: {
   player: Player;
   position: string;
   isCurrent: boolean;
+  isThinking: boolean;
   isUser: boolean;
   tableRole?: string;
   showdownLabel?: string;
   lastAction?: VisualAction;
   isActing: boolean;
   isWinner: boolean;
+  isLoser: boolean;
   isShowdown: boolean;
+  winnings: number;
 }) {
   return (
     <article
       className={`player-seat ${position} ${isCurrent ? "is-current" : ""} ${
         player.folded ? "is-folded" : ""
-      } ${isActing ? "is-acting" : ""} ${isWinner ? "is-winner" : ""} ${player.all_in ? "is-all-in" : ""}`}
+      } ${isThinking ? "is-thinking" : ""} ${isActing ? "is-acting" : ""} ${isWinner ? "is-winner" : ""} ${
+        isLoser ? "is-loser" : ""
+      } ${player.all_in ? "is-all-in" : ""}`}
     >
-      {isCurrent && <div className="action-timer" key={`${player.id}-${player.current_bet}`} />}
+      {(isCurrent || isThinking) && <div className="action-timer" key={`${player.id}-${player.current_bet}-${isThinking}`} />}
       <div className="avatar-wrap">
         <div className="avatar" aria-hidden="true">{player.name.slice(0, 1)}</div>
         {tableRole && <span className="table-marker">{tableRole}</span>}
@@ -451,6 +518,12 @@ function PlayerSeat({
         <p className={`action-badge ${lastAction.action === "fold" ? "fold-action" : ""}`}>
           {lastAction.action}
           {lastAction.amount > 0 ? ` $${lastAction.amount}` : ""}
+        </p>
+      )}
+      {isWinner && (
+        <p className="winner-badge">
+          WINNER {winnings > 0 ? `+$${winnings}` : ""}
+          {!showdownLabel && <span>Won uncontested</span>}
         </p>
       )}
       {showdownLabel && <p className="showdown-label">{showdownLabel}</p>}
@@ -702,6 +775,43 @@ function tableRoleForPlayer(game: GameResponse["game"], playerId: string) {
   if (game.small_blind_player_id === playerId) return "SB";
   if (game.big_blind_player_id === playerId) return "BB";
   return undefined;
+}
+
+function calculateWinnerAmounts(game: GameResponse["game"] | null) {
+  const awards = new Map<string, number>();
+  if (!game) return awards;
+
+  for (const pot of game.side_pots) {
+    if (!pot.winner_ids.length) continue;
+
+    const baseShare = Math.floor(pot.amount / pot.winner_ids.length);
+    const oddChips = pot.amount % pot.winner_ids.length;
+    pot.winner_ids.forEach((winnerId, index) => {
+      const share = baseShare + (index < oddChips ? 1 : 0);
+      awards.set(winnerId, (awards.get(winnerId) ?? 0) + share);
+    });
+  }
+
+  if (!awards.size && game.winners.length === 1) {
+    awards.set(game.winners[0], game.pot);
+  }
+
+  return awards;
+}
+
+function hasStreetAdvanced(previousGame: GameResponse["game"], nextGame: GameResponse["game"]) {
+  return previousGame.street !== nextGame.street || previousGame.board.length !== nextGame.board.length;
+}
+
+function getActionThinkingDelay(action: string) {
+  const [min, max] = ACTION_THINKING_DELAYS[action] ?? [900, 1600];
+  return Math.round(min + Math.random() * (max - min));
+}
+
+function getActionVisibleDuration(action: string) {
+  if (action === "all_in") return ACTION_VISIBLE_MS + 450;
+  if (action === "bet" || action === "raise") return ACTION_VISIBLE_MS + 250;
+  return ACTION_VISIBLE_MS;
 }
 
 function sleep(ms: number) {
