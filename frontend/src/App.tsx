@@ -9,6 +9,7 @@ import {
   Settings,
   TrendingUp,
   Volume2,
+  X,
 } from "lucide-react";
 import { applyAction, BotAction, Coach, createGame, GameResponse, getGameReview, Player, PlayerReview } from "./api";
 
@@ -28,6 +29,7 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [visualActions, setVisualActions] = useState<VisualAction[]>([]);
   const [playerReview, setPlayerReview] = useState<PlayerReview | null>(null);
+  const [reviewDismissed, setReviewDismissed] = useState(false);
 
   const game = gameResponse?.game ?? null;
   const coach = gameResponse?.coach ?? null;
@@ -98,6 +100,7 @@ export function App() {
       setGameResponse(nextGame);
       setBotHistory([]);
       setPlayerReview(null);
+      setReviewDismissed(false);
       await replayActions(nextGame.bot_actions);
       if (nextGame.game.street === "complete") {
         await loadReview(nextGame.game.id);
@@ -140,6 +143,7 @@ export function App() {
     try {
       const review = await getGameReview(gameId);
       setPlayerReview(review);
+      setReviewDismissed(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load game review");
     }
@@ -306,11 +310,54 @@ export function App() {
 
       <aside className="side-panel">
         <LiveStatsPanel coach={coach} />
-        {playerReview && <PlayerReviewPanel review={playerReview} />}
         <HandLessonPanel lesson={handLesson} />
         <HistoryPanel botHistory={botHistory} />
       </aside>
+      {playerReview && !reviewDismissed && (
+        <ReviewModal
+          review={playerReview}
+          onClose={() => setReviewDismissed(true)}
+          onNewHand={startNewGame}
+          loading={loading}
+        />
+      )}
     </main>
+  );
+}
+
+function ReviewModal({
+  review,
+  onClose,
+  onNewHand,
+  loading,
+}: {
+  review: PlayerReview;
+  onClose: () => void;
+  onNewHand: () => void;
+  loading: boolean;
+}) {
+  return (
+    <div className="review-backdrop" role="presentation">
+      <section className="review-modal" role="dialog" aria-modal="true" aria-labelledby="review-title">
+        <header className="review-modal-header">
+          <div>
+            <p className="eyebrow">Machine Learning Coach</p>
+            <h2 id="review-title">After-Hand Review</h2>
+          </div>
+          <button className="tool-button" type="button" onClick={onClose} aria-label="Close review">
+            <X size={18} />
+          </button>
+        </header>
+        <PlayerReviewPanel review={review} />
+        <footer className="review-modal-footer">
+          <p>This review is based on how you chose to fold, call, check, or raise during the hand.</p>
+          <button className="icon-button" type="button" onClick={onNewHand} disabled={loading}>
+            {loading ? <Loader2 className="spin" size={18} /> : <RotateCcw size={18} />}
+            Play Next Hand
+          </button>
+        </footer>
+      </section>
+    </div>
   );
 }
 
