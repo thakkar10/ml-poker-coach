@@ -18,7 +18,7 @@ class RandomBot:
     def choose_action(self, game: PokerGame, *, player_id: str) -> AgentAction:
         legal = sorted(game.legal_actions(player_id), key=lambda action: action.value)
         action = self._rng.choice(legal)
-        amount = _raise_amount(game, player_id) if action == Action.RAISE else 0
+        amount = _raise_amount(game, player_id) if action in {Action.BET, Action.RAISE} else 0
         return AgentAction(action, amount, "Chooses randomly from legal actions.")
 
 
@@ -36,8 +36,9 @@ class TightBot:
 
         if call_price > 0 and equity < max(0.30, required_equity + 0.04):
             return AgentAction(Action.FOLD, reason="Tight bot folds without a strong enough equity edge.")
-        if equity > 0.68 and Action.RAISE in legal:
-            return AgentAction(Action.RAISE, _raise_amount(game, player_id), "Tight bot raises with a premium spot.")
+        pressure_action = _pressure_action(legal)
+        if equity > 0.68 and pressure_action:
+            return AgentAction(pressure_action, _raise_amount(game, player_id), "Tight bot applies pressure with a premium spot.")
         if Action.CALL in legal:
             return AgentAction(Action.CALL, reason="Tight bot continues with sufficient equity.")
         return AgentAction(Action.CHECK, reason="Tight bot checks without a strong value edge.")
@@ -61,8 +62,9 @@ class AggressiveBot:
         call_price = _amount_to_call(game, player_id)
         required_equity = pot_odds(call_price, game.pot)
 
-        if Action.RAISE in legal and (equity > 0.48 or self._rng.random() < 0.22):
-            return AgentAction(Action.RAISE, _raise_amount(game, player_id), "Aggressive bot applies pressure.")
+        pressure_action = _pressure_action(legal)
+        if pressure_action and (equity > 0.48 or self._rng.random() < 0.22):
+            return AgentAction(pressure_action, _raise_amount(game, player_id), "Aggressive bot applies pressure.")
         if Action.CALL in legal and equity + 0.08 >= required_equity:
             return AgentAction(Action.CALL, reason="Aggressive bot continues with a playable edge.")
         if Action.CHECK in legal:
@@ -84,8 +86,9 @@ class EquityBot:
 
         if call_price > 0 and equity + 0.02 < required_equity:
             return AgentAction(Action.FOLD, reason="Equity bot folds because equity is below pot odds.")
-        if equity > required_equity + 0.16 and Action.RAISE in legal:
-            return AgentAction(Action.RAISE, _raise_amount(game, player_id), "Equity bot raises with a clear mathematical edge.")
+        pressure_action = _pressure_action(legal)
+        if equity > required_equity + 0.16 and pressure_action:
+            return AgentAction(pressure_action, _raise_amount(game, player_id), "Equity bot applies pressure with a clear mathematical edge.")
         if Action.CALL in legal:
             return AgentAction(Action.CALL, reason="Equity bot calls because the price is profitable enough.")
         return AgentAction(Action.CHECK, reason="Equity bot checks when continuing is free.")
@@ -124,10 +127,19 @@ def _amount_to_call(game: PokerGame, player_id: str) -> int:
 
 def _raise_amount(game: PokerGame, player_id: str) -> int:
     player = _player(game, player_id)
-    minimum_raise_to = max(game.config.big_blind, game.current_bet + game.config.big_blind)
+    legal = game.legal_action_state(player_id)
+    minimum_raise_to = legal.minimum_raise_to if game.current_bet > 0 else legal.minimum_bet
     pressure_raise_to = game.current_bet + max(game.config.big_blind, game.pot // 2)
     all_in_raise_to = player.current_bet + player.stack
     return min(max(minimum_raise_to, pressure_raise_to), all_in_raise_to)
+
+
+def _pressure_action(legal: set[Action]) -> Action | None:
+    if Action.RAISE in legal:
+        return Action.RAISE
+    if Action.BET in legal:
+        return Action.BET
+    return None
 
 
 def _player(game: PokerGame, player_id: str):

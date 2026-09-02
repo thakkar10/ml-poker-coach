@@ -35,13 +35,19 @@ export function App() {
   const coach = gameResponse?.coach ?? null;
   const user = game?.players[0] ?? null;
   const canAct = game?.current_player_id === "p0" && game.street !== "complete" && !replaying;
-  const toCall = user && game ? Math.max(0, game.current_bet - user.current_bet) : 0;
-  const maxRaise = user ? user.stack + user.current_bet : 1000;
-  const minRaise = game ? Math.min(maxRaise, Math.max(game.current_bet + 20, 40)) : 40;
-  const canRaise = Boolean(canAct && game?.legal_actions.includes("raise"));
-  const passiveLabel = game?.legal_actions.includes("check") ? "Check" : `Call $${toCall}`;
-  const aggressiveLabel = game?.legal_actions.includes("raise")
-    ? game.current_bet > 0
+  const legalDetails = game?.legal_action_details;
+  const toCall = legalDetails?.call_amount ?? 0;
+  const maxRaise = legalDetails?.maximum_raise_to ?? (user ? user.stack + user.current_bet : 1000);
+  const minRaise = game?.legal_actions.includes("bet")
+    ? (legalDetails?.minimum_bet ?? 20)
+    : (legalDetails?.minimum_raise_to ?? 40);
+  const canRaise = Boolean(canAct && legalDetails?.can_raise);
+  const canBet = Boolean(canAct && legalDetails?.can_bet);
+  const canAggressiveAction = canRaise || canBet;
+  const canAllIn = Boolean(canAct && legalDetails?.can_all_in);
+  const passiveLabel = legalDetails?.can_check ? "Check" : `Call $${toCall}`;
+  const aggressiveLabel = canAggressiveAction
+    ? (game?.current_bet ?? 0) > 0
       ? `Raise to $${raiseAmount}`
       : `Bet $${raiseAmount}`
     : "Raise";
@@ -50,11 +56,11 @@ export function App() {
     const stack = user?.stack ?? 0;
     const alreadyCommitted = user?.current_bet ?? 0;
     const sizes = [
-      { label: "1/3 Pot", amount: Math.round(pot / 3) },
-      { label: "1/2 Pot", amount: Math.round(pot / 2) },
-      { label: "3/4 Pot", amount: Math.round((pot * 3) / 4) },
-      { label: "Pot", amount: pot },
-      { label: "All In", amount: stack + alreadyCommitted },
+      { label: "1/3 Pot", amount: Math.round(pot / 3), allIn: false },
+      { label: "1/2 Pot", amount: Math.round(pot / 2), allIn: false },
+      { label: "3/4 Pot", amount: Math.round((pot * 3) / 4), allIn: false },
+      { label: "Pot", amount: pot, allIn: false },
+      { label: "All In", amount: stack + alreadyCommitted, allIn: true },
     ];
 
     return sizes.map((size) => ({
@@ -118,12 +124,12 @@ export function App() {
     setLoading(true);
     setError(null);
     try {
-      const nextGame = await applyAction(game.id, action, action === "raise" ? raiseAmount : 0);
+      const nextGame = await applyAction(game.id, action, action === "raise" || action === "bet" ? raiseAmount : 0);
       const userAction = {
         player_id: "p0",
         player_name: "You",
         action,
-        amount: action === "raise" ? raiseAmount : 0,
+        amount: action === "raise" || action === "bet" ? raiseAmount : action === "all_in" ? (legalDetails?.all_in_amount ?? 0) : 0,
         agent_name: "Player",
         reason: "You chose this action.",
       };
@@ -264,8 +270,8 @@ export function App() {
                 <button
                   key={size.label}
                   type="button"
-                  onClick={() => setRaiseAmount(size.amount)}
-                  disabled={!canRaise || loading}
+                  onClick={() => (size.allIn ? chooseAction("all_in") : setRaiseAmount(size.amount))}
+                  disabled={size.allIn ? !canAllIn || loading : !canAggressiveAction || loading}
                 >
                   {size.label}
                 </button>
@@ -300,7 +306,7 @@ export function App() {
               <button onClick={() => chooseAction(game?.legal_actions.includes("check") ? "check" : "call")} disabled={!canAct || loading}>
                 {passiveLabel}
               </button>
-              <button className="raise-button" onClick={() => chooseAction("raise")} disabled={!canRaise || loading}>
+              <button className="raise-button" onClick={() => chooseAction(game?.legal_actions.includes("bet") ? "bet" : "raise")} disabled={!canAggressiveAction || loading}>
                 {aggressiveLabel}
               </button>
             </div>

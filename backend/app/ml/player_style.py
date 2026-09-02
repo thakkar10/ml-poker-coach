@@ -20,7 +20,9 @@ class DecisionLog:
 
     @property
     def followed_coach(self) -> bool:
-        return self.action == self.recommended_action
+        return self.action == self.recommended_action or (
+            self.action in AGGRESSIVE_ACTIONS and self.recommended_action in AGGRESSIVE_ACTIONS
+        )
 
     @property
     def equity_edge(self) -> float:
@@ -77,7 +79,7 @@ class PlayerStyleAnalyzer:
         total = len(decisions)
         fold_rate = _rate(decisions, Action.FOLD)
         call_rate = _rate(decisions, Action.CALL) + _rate(decisions, Action.CHECK)
-        raise_rate = _rate(decisions, Action.RAISE)
+        raise_rate = _action_group_rate(decisions, AGGRESSIVE_ACTIONS)
         coach_alignment = sum(decision.followed_coach for decision in decisions) / total
         avg_edge = sum(decision.equity_edge for decision in decisions) / total
 
@@ -134,7 +136,7 @@ class PlayerStyleAnalyzer:
             decision
             for decision in decisions
             if decision.action in {Action.CALL, Action.CHECK}
-            and decision.recommended_action == Action.RAISE
+            and decision.recommended_action in AGGRESSIVE_ACTIONS
         ]
         overfolds = [
             decision
@@ -205,3 +207,10 @@ class PlayerStyleAnalyzer:
 
 def _rate(decisions: list[DecisionLog], action: Action) -> float:
     return sum(decision.action == action for decision in decisions) / len(decisions)
+
+
+AGGRESSIVE_ACTIONS = {Action.BET, Action.RAISE, Action.ALL_IN}
+
+
+def _action_group_rate(decisions: list[DecisionLog], actions: set[Action]) -> float:
+    return sum(decision.action in actions for decision in decisions) / len(decisions)

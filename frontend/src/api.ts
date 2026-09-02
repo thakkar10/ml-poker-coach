@@ -1,10 +1,13 @@
 export type Player = {
   id: string;
   name: string;
+  seat_position: number;
   stack: number;
   current_bet: number;
+  total_committed: number;
   folded: boolean;
   all_in: boolean;
+  active: boolean;
   hole_cards: string[];
 };
 
@@ -27,10 +30,28 @@ export type GameState = {
   button_player_id: string;
   small_blind_player_id: string;
   big_blind_player_id: string;
+  legal_action_details: {
+    can_fold: boolean;
+    can_check: boolean;
+    can_call: boolean;
+    call_amount: number;
+    can_bet: boolean;
+    minimum_bet: number;
+    can_raise: boolean;
+    minimum_raise_to: number;
+    maximum_raise_to: number;
+    can_all_in: boolean;
+    all_in_amount: number;
+  };
   legal_actions: string[];
   players: Player[];
   winners: string[];
   showdown: Record<string, string>;
+  side_pots: Array<{
+    amount: number;
+    eligible_player_ids: string[];
+    winner_ids: string[];
+  }>;
 };
 
 export type BotAction = {

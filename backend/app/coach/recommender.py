@@ -84,15 +84,17 @@ class PokerCoach:
         amount_to_call: int,
     ) -> Action:
         if amount_to_call == 0 and Action.CHECK in legal_actions:
-            if equity >= 0.62 and Action.RAISE in legal_actions:
-                return Action.RAISE
+            pressure_action = self._pressure_action(legal_actions)
+            if equity >= 0.62 and pressure_action:
+                return pressure_action
             return Action.CHECK
 
         if equity + 0.03 < required_equity and Action.FOLD in legal_actions:
             return Action.FOLD
 
-        if equity >= required_equity + 0.18 and Action.RAISE in legal_actions:
-            return Action.RAISE
+        pressure_action = self._pressure_action(legal_actions)
+        if equity >= required_equity + 0.18 and pressure_action:
+            return pressure_action
 
         if Action.CALL in legal_actions:
             return Action.CALL
@@ -100,12 +102,20 @@ class PokerCoach:
         return sorted(legal_actions, key=lambda item: item.value)[0]
 
     def _raise_amount(self, game: PokerGame, player: PlayerState, action: Action) -> int:
-        if action != Action.RAISE:
+        if action not in {Action.BET, Action.RAISE}:
             return 0
-        minimum_raise_to = max(game.config.big_blind, game.current_bet + game.config.big_blind)
+        legal = game.legal_action_state(player.id)
+        minimum_raise_to = legal.minimum_raise_to if action == Action.RAISE else legal.minimum_bet
         value_raise_to = game.current_bet + max(game.config.big_blind, game.pot // 2)
         affordable_raise_to = player.current_bet + player.stack
         return min(max(minimum_raise_to, value_raise_to), affordable_raise_to)
+
+    def _pressure_action(self, legal_actions: set[Action]) -> Action | None:
+        if Action.RAISE in legal_actions:
+            return Action.RAISE
+        if Action.BET in legal_actions:
+            return Action.BET
+        return None
 
     def _explain(
         self,
@@ -132,7 +142,7 @@ class PokerCoach:
             reasons.append("The hand has enough equity to continue, but not enough edge to raise confidently.")
         elif action == Action.CHECK:
             reasons.append("The hand can continue for free without growing the pot.")
-        elif action == Action.RAISE:
+        elif action in {Action.BET, Action.RAISE}:
             reasons.append("The equity edge is strong enough to apply pressure or build value.")
 
         if spr < 3:
