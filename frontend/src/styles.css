@@ -377,7 +377,6 @@ h2 {
 .player-seat.is-folded .card {
   filter: grayscale(0.85);
   opacity: 0.48;
-  transform: translateY(8px) rotate(-5deg);
 }
 
 .player-seat.is-acting {
@@ -386,6 +385,10 @@ h2 {
     0 0 0 2px rgba(255, 242, 191, 0.35),
     0 20px 46px rgba(0, 0, 0, 0.44);
   animation: action-flash 1100ms ease both;
+}
+
+.player-seat.action-fold .card {
+  animation: card-to-muck 240ms ease-in both;
 }
 
 .player-seat.is-winner {
@@ -764,7 +767,7 @@ h2 {
   width: 54px;
   height: 28px;
   opacity: 0;
-  animation: chips-to-pot 1700ms cubic-bezier(0.22, 0.9, 0.24, 1) both;
+  animation: chips-to-bet 1250ms cubic-bezier(0.22, 0.9, 0.24, 1) both;
 }
 
 .chip-burst span {
@@ -791,43 +794,43 @@ h2 {
 .from-p0 {
   left: 50%;
   top: calc(100% - 110px);
-  --chip-x: -40px;
-  --chip-y: -250px;
+  --chip-x: -28px;
+  --chip-y: -120px;
 }
 
 .from-p1 {
   left: 16%;
   top: 70%;
-  --chip-x: 280px;
-  --chip-y: -180px;
+  --chip-x: 135px;
+  --chip-y: -92px;
 }
 
 .from-p2 {
   left: 18%;
   top: 21%;
-  --chip-x: 300px;
-  --chip-y: 90px;
+  --chip-x: 118px;
+  --chip-y: 68px;
 }
 
 .from-p3 {
   left: 50%;
   top: 105px;
-  --chip-x: -40px;
-  --chip-y: 210px;
+  --chip-x: -28px;
+  --chip-y: 74px;
 }
 
 .from-p4 {
   right: 18%;
   top: 21%;
-  --chip-x: -300px;
-  --chip-y: 90px;
+  --chip-x: -118px;
+  --chip-y: 68px;
 }
 
 .from-p5 {
   right: 16%;
   top: 70%;
-  --chip-x: -280px;
-  --chip-y: -180px;
+  --chip-x: -135px;
+  --chip-y: -92px;
 }
 
 .pot-award {
@@ -1563,7 +1566,19 @@ h2 {
   }
 }
 
-@keyframes chips-to-pot {
+@keyframes card-to-muck {
+  0% {
+    opacity: 1;
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(18px) rotate(-9deg) scale(0.84);
+  }
+}
+
+@keyframes chips-to-bet {
   0% {
     opacity: 0;
     transform: translate(0, 0) scale(0.82);

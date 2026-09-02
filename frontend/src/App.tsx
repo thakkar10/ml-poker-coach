@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { MutableRefObject, useEffect, useMemo, useRef, useState } from "react";
 import {
   BookOpen,
   Brain,
@@ -29,6 +29,7 @@ const ACTION_THINKING_DELAYS: Record<string, [number, number]> = {
 
 type VisualAction = Pick<BotAction, "player_id" | "player_name" | "action" | "amount"> & {
   id: string;
+  eventId: string;
 };
 
 export function App() {
@@ -43,13 +44,17 @@ export function App() {
   const [playerReview, setPlayerReview] = useState<PlayerReview | null>(null);
   const [reviewDismissed, setReviewDismissed] = useState(false);
   const [reviewCountdown, setReviewCountdown] = useState<number | null>(null);
+  const didStartInitialGame = useRef(false);
+  const actionLock = useRef(false);
+  const visualEventSequence = useRef(0);
+  const consumedVisualEventIds = useRef(new Set<string>());
   const reviewScheduledGameId = useRef<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
 
   const game = gameResponse?.game ?? null;
   const coach = gameResponse?.coach ?? null;
   const user = game?.players[0] ?? null;
-  const canAct = game?.current_player_id === "p0" && game.street !== "complete" && !replaying;
+  const canAct = game?.current_player_id === "p0" && game.street !== "complete" && !replaying && !loading;
   const legalDetails = game?.legal_action_details;
   const toCall = legalDetails?.call_amount ?? 0;
   const maxRaise = legalDetails?.maximum_raise_to ?? (user ? user.stack + user.current_bet : 1000);
@@ -113,6 +118,8 @@ export function App() {
   const winnerAmounts = useMemo(() => calculateWinnerAmounts(game), [game]);
 
   useEffect(() => {
+    if (didStartInitialGame.current) return;
+    didStartInitialGame.current = true;
     void startNewGame();
   }, []);
 
@@ -146,6 +153,8 @@ export function App() {
   }, [game, playerReview, replaying]);
 
   async function startNewGame() {
+    if (actionLock.current) return;
+    actionLock.current = true;
     setLoading(true);
     setError(null);
     try {
@@ -157,17 +166,21 @@ export function App() {
       setReviewCountdown(null);
       reviewScheduledGameId.current = null;
       setThinkingPlayerId(null);
+      setVisualActions([]);
+      consumedVisualEventIds.current.clear();
       await replayActions(nextGame.bot_actions);
       setRaiseAmount(80);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start game");
     } finally {
+      actionLock.current = false;
       setLoading(false);
     }
   }
 
   async function chooseAction(action: string) {
-    if (!game || !canAct) return;
+    if (!game || !canAct || actionLock.current) return;
+    actionLock.current = true;
     setLoading(true);
     setError(null);
     try {
@@ -187,7 +200,10 @@ export function App() {
         agent_name: "Player",
         reason: "You chose this action.",
       };
-      await replayActions([userAction, ...nextGame.bot_actions], { includeInLog: nextGame.bot_actions });
+      await replayActions([userAction, ...nextGame.bot_actions], {
+        includeInLog: nextGame.bot_actions,
+        immediatePlayerIds: new Set(["p0"]),
+      });
       if (hasStreetAdvanced(game, nextGame.game)) {
         await sleep(900);
       }
@@ -195,6 +211,7 @@ export function App() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Action failed");
     } finally {
+      actionLock.current = false;
       setLoading(false);
     }
   }
@@ -211,17 +228,24 @@ export function App() {
 
   async function replayActions(
     actions: BotAction[],
-    options: { includeInLog?: BotAction[] } = {},
+    options: { includeInLog?: BotAction[]; immediatePlayerIds?: Set<string> } = {},
   ) {
     if (!actions.length) return;
 
     setReplaying(true);
     const loggable = options.includeInLog ?? actions;
     for (const action of actions) {
-      setThinkingPlayerId(action.player_id);
-      await sleep(getActionThinkingDelay(action.action));
-      setThinkingPlayerId(null);
-      setVisualActions(toVisualActions([action]));
+      const visualAction = toVisualAction(action, createVisualEventId(action, visualEventSequence));
+      if (consumedVisualEventIds.current.has(visualAction.eventId)) {
+        continue;
+      }
+      consumedVisualEventIds.current.add(visualAction.eventId);
+      if (!options.immediatePlayerIds?.has(action.player_id)) {
+        setThinkingPlayerId(action.player_id);
+        await sleep(getActionThinkingDelay(action.action));
+        setThinkingPlayerId(null);
+      }
+      setVisualActions([visualAction]);
       if (loggable.includes(action)) {
         setBotHistory((previous) => [action, ...previous].slice(0, 10));
       }
@@ -485,7 +509,9 @@ function PlayerSeat({
     <article
       className={`player-seat ${position} ${isCurrent ? "is-current" : ""} ${
         player.folded ? "is-folded" : ""
-      } ${isThinking ? "is-thinking" : ""} ${isActing ? "is-acting" : ""} ${isWinner ? "is-winner" : ""} ${
+      } ${lastAction ? `action-${lastAction.action}` : ""} ${isThinking ? "is-thinking" : ""} ${
+        isActing ? "is-acting" : ""
+      } ${isWinner ? "is-winner" : ""} ${
         isLoser ? "is-loser" : ""
       } ${player.all_in ? "is-all-in" : ""}`}
     >
@@ -754,15 +780,20 @@ function MetricBar({ label, value }: { label: string; value: number }) {
   );
 }
 
-function toVisualActions(actions: BotAction[]): VisualAction[] {
-  const timestamp = Date.now();
-  return actions.map((action, index) => ({
-    id: `${action.player_id}-${timestamp}-${index}-${action.action}`,
+function createVisualEventId(action: BotAction, sequence: MutableRefObject<number>) {
+  sequence.current += 1;
+  return `${action.player_id}-${action.action}-${action.amount}-${sequence.current}`;
+}
+
+function toVisualAction(action: BotAction, eventId: string): VisualAction {
+  return {
+    id: eventId,
+    eventId,
     player_id: action.player_id,
     player_name: action.player_name,
     action: action.action,
     amount: action.amount,
-  }));
+  };
 }
 
 function clampBetSize(value: number, min: number, max: number) {
