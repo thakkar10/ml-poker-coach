@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.agents import AggressiveBot, BotAgent, EquityBot, RandomBot, TightBot
+from app.agents import AggressiveBot, BotAgent, EquityBot, LoosePassiveBot, RecreationalBot, TightBot
 from app.coach import PokerCoach
 from app.coach.equity import EquitySimulator
 from app.core.game import Action, PokerGame, Street
@@ -114,11 +114,11 @@ def serialize_bot_logs(logs: list[BotActionLog]) -> list[dict[str, object]]:
 
 def _default_agents(game: PokerGame) -> dict[str, BotAgent]:
     agent_cycle: list[BotAgent] = [
-        TightBot(equity_simulator=EquitySimulator(simulations=250, seed=11)),
+        TightBot(equity_simulator=EquitySimulator(simulations=250, seed=11), seed=11),
         AggressiveBot(equity_simulator=EquitySimulator(simulations=250, seed=13), seed=13),
-        EquityBot(equity_simulator=EquitySimulator(simulations=250, seed=17)),
-        RandomBot(seed=19),
-        TightBot(equity_simulator=EquitySimulator(simulations=250, seed=23)),
+        EquityBot(equity_simulator=EquitySimulator(simulations=250, seed=17), seed=17),
+        LoosePassiveBot(equity_simulator=EquitySimulator(simulations=250, seed=19), seed=19),
+        RecreationalBot(equity_simulator=EquitySimulator(simulations=250, seed=23), seed=23),
     ]
     return {
         player.id: agent_cycle[index - 1]

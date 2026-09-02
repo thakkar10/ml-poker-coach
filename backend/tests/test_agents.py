@@ -1,4 +1,4 @@
-from app.agents import AggressiveBot, EquityBot, RandomBot, TightBot
+from app.agents import AggressiveBot, EquityBot, LoosePassiveBot, RandomBot, RecreationalBot, TightBot
 from app.coach.equity import EquitySimulator
 from app.core.cards import Card
 from app.core.game import Action, PokerGame
@@ -83,3 +83,49 @@ def test_table_runner_stops_immediately_on_user_turn() -> None:
 
     assert logs == []
     assert game.current_player.id == "p0"
+
+
+def test_deep_stacked_bots_use_normal_raise_sizes_instead_of_open_shoving() -> None:
+    game = PokerGame(["You", "Aggro"], seed=1)
+    aggro = AggressiveBot(
+        equity_simulator=EquitySimulator(simulations=80, seed=3),
+        seed=4,
+    )
+    game.players[1].hole_cards = cards("As Ah")
+    game.current_player_index = 1
+    game.players[1].current_bet = game.current_bet
+
+    action = aggro.choose_action(game, player_id="p1")
+
+    assert action.action == Action.RAISE
+    assert game.config.big_blind * 2 <= action.amount <= game.config.big_blind * 4
+    assert action.amount < game.players[1].stack
+
+
+def test_bots_do_not_call_or_shove_weak_offsuit_hands_deep_stacked() -> None:
+    game = PokerGame(["You", "Loose Passive"], seed=12)
+    bot = LoosePassiveBot(equity_simulator=EquitySimulator(simulations=80, seed=8), seed=8)
+    game.players[1].hole_cards = cards("Jc 2d")
+    game.current_player_index = 1
+    game.players[0].current_bet = 180
+    game.current_bet = 180
+    game.pot = 240
+
+    action = bot.choose_action(game, player_id="p1")
+
+    assert action.action == Action.FOLD
+
+
+def test_very_short_stacked_bot_can_push_reasonable_preflop_hand() -> None:
+    game = PokerGame(["You", "Rec"], seed=33)
+    bot = RecreationalBot(equity_simulator=EquitySimulator(simulations=80, seed=9), seed=9)
+    game.players[1].hole_cards = cards("Ah Td")
+    game.players[1].stack = 120
+    game.players[1].current_bet = 0
+    game.current_player_index = 1
+    game.current_bet = 20
+    game.pot = 30
+
+    action = bot.choose_action(game, player_id="p1")
+
+    assert action.action == Action.ALL_IN
