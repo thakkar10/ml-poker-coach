@@ -335,7 +335,7 @@ h2 {
   grid-template-columns: auto 1fr;
   gap: 5px 8px;
   width: var(--seat-width);
-  min-height: 0;
+  min-height: clamp(104px, 13vh, 124px);
   padding: clamp(5px, 0.55vw, 7px);
   border: 1px solid rgba(255, 255, 255, 0.055);
   border-radius: 8px;
@@ -406,7 +406,7 @@ h2 {
 .action-timer {
   position: absolute;
   right: 10px;
-  bottom: 8px;
+  bottom: -7px;
   left: 10px;
   height: 4px;
   overflow: hidden;
@@ -426,7 +426,7 @@ h2 {
 
 .seat-user {
   width: var(--user-seat-width);
-  min-height: 0;
+  min-height: clamp(128px, 16vh, 148px);
   left: 50%;
   bottom: 10px;
   transform: translateX(-50%);
@@ -569,9 +569,13 @@ h2 {
 }
 
 .action-badge {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 7px);
+  z-index: 4;
+  width: max-content;
+  max-width: 150px;
   margin: 0;
-  justify-self: start;
-  max-width: 100%;
   padding: 6px 8px;
   border: 1px solid rgba(229, 185, 79, 0.26);
   border-radius: 999px;
@@ -581,7 +585,15 @@ h2 {
   font-weight: 900;
   line-height: 1.15;
   text-transform: capitalize;
+  transform: translateX(-50%);
   animation: action-badge-pop 800ms ease both;
+  pointer-events: none;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.seat-user .action-badge {
+  top: -32px;
 }
 
 .action-badge.fold-action {
@@ -1462,12 +1474,12 @@ h2 {
 @keyframes action-badge-pop {
   0% {
     opacity: 0;
-    transform: translateY(6px) scale(0.94);
+    transform: translate(-50%, 6px) scale(0.94);
   }
 
   100% {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translate(-50%, 0) scale(1);
   }
 }
 
