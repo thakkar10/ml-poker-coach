@@ -44,6 +44,7 @@ export function App() {
   const [playerReview, setPlayerReview] = useState<PlayerReview | null>(null);
   const [reviewDismissed, setReviewDismissed] = useState(false);
   const [reviewCountdown, setReviewCountdown] = useState<number | null>(null);
+  const gameResponseRef = useRef<GameResponse | null>(null);
   const didStartInitialGame = useRef(false);
   const actionLock = useRef(false);
   const visualEventSequence = useRef(0);
@@ -160,7 +161,7 @@ export function App() {
     setError(null);
     try {
       const nextGame = await createGame();
-      setGameResponse(nextGame.bot_actions[0]?.state_before ? withGameState(nextGame, nextGame.bot_actions[0].state_before) : nextGame);
+      commitGameResponse(nextGame.bot_actions[0]?.state_before ? withGameState(nextGame, nextGame.bot_actions[0].state_before) : nextGame);
       setBotHistory([]);
       setPlayerReview(null);
       setReviewDismissed(false);
@@ -170,7 +171,7 @@ export function App() {
       setVisualActions([]);
       consumedVisualEventIds.current.clear();
       await replayActions(nextGame.bot_actions);
-      setGameResponse(nextGame);
+      commitGameResponse(nextGame);
       setRaiseAmount(80);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start game");
@@ -201,6 +202,8 @@ export function App() {
                 : 0,
         agent_name: "Player",
         reason: "You chose this action.",
+        state_before: game,
+        state_after: nextGame.bot_actions[0]?.state_before ?? nextGame.game,
       };
       await replayActions([userAction, ...nextGame.bot_actions], {
         includeInLog: nextGame.bot_actions,
@@ -209,7 +212,7 @@ export function App() {
       if (hasStreetAdvanced(game, nextGame.game)) {
         await sleep(900);
       }
-      setGameResponse(nextGame);
+      commitGameResponse(nextGame);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Action failed");
     } finally {
@@ -272,14 +275,18 @@ export function App() {
   }
 
   async function syncVisualGameState(nextState: GameResponse["game"]) {
-    let shouldPauseForBoardReveal = false;
-    setGameResponse((current) => {
-      shouldPauseForBoardReveal = Boolean(current && hasNewCommunityCards(current.game, nextState));
-      return withGameState(current, nextState);
-    });
-    if (shouldPauseForBoardReveal) {
-      await sleep(950);
+    const current = gameResponseRef.current;
+    const revealStates = current ? buildBoardRevealStates(current.game, nextState) : [];
+    for (const revealState of revealStates) {
+      commitGameResponse(withGameState(current, revealState));
+      await sleep(1050);
     }
+    commitGameResponse(withGameState(current, nextState));
+  }
+
+  function commitGameResponse(nextResponse: GameResponse) {
+    gameResponseRef.current = nextResponse;
+    setGameResponse(nextResponse);
   }
 
   const tableStatus = useMemo(() => {
@@ -875,9 +882,26 @@ function visibleBoardCardCount(street: string) {
   return 0;
 }
 
-function hasNewCommunityCards(previousGame: GameResponse["game"], nextGame: GameResponse["game"]) {
-  return visibleBoardCardCount(nextGame.street) > visibleBoardCardCount(previousGame.street)
-    || nextGame.board.length > previousGame.board.length;
+function buildBoardRevealStates(previousGame: GameResponse["game"], nextGame: GameResponse["game"]) {
+  const previousVisible = Math.min(previousGame.board.length, visibleBoardCardCount(previousGame.street));
+  const nextVisible = Math.min(nextGame.board.length, visibleBoardCardCount(nextGame.street));
+  if (nextVisible <= previousVisible) return [];
+
+  const revealCounts = [3, 4, 5].filter((count) => count > previousVisible && count <= nextVisible);
+  return revealCounts.map((count) => ({
+    ...nextGame,
+    street: streetForBoardCount(count),
+    board: nextGame.board.slice(0, count),
+    current_player_id: null,
+    legal_actions: [],
+  }));
+}
+
+function streetForBoardCount(cardCount: number) {
+  if (cardCount >= 5) return "river";
+  if (cardCount === 4) return "turn";
+  if (cardCount >= 3) return "flop";
+  return "preflop";
 }
 
 function hasStreetAdvanced(previousGame: GameResponse["game"], nextGame: GameResponse["game"]) {
