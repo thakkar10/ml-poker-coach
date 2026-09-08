@@ -25,3 +25,23 @@ ML Poker Coach is designed as a portfolio-grade machine learning product, not ju
 - `feature/ai-coach-v0`: equity simulation and baseline recommendations
 - `feature/web-ui`: interactive poker table and coach interface
 - `feature/ml-training-pipeline`: simulation data, training, and evaluation
+
+## Local Development
+
+Run the backend API:
+
+```bash
+cd backend
+python3 -m pip install -e '.[dev]'
+python3 -m uvicorn app.main:app --reload
+```
+
+Run the frontend:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Then open the local frontend URL printed by Vite. The frontend proxies `/api` requests to the FastAPI backend.
