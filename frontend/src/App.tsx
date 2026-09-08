@@ -373,6 +373,9 @@ export function App() {
                 />
               ))}
             </div>
+            {game?.street === "preflop" && game.current_bet > 20 && communityCards.every((card) => !card) && (
+              <div className="street-note">Preflop betting is still open</div>
+            )}
             <div className="street-pill">{game?.street ?? "loading"}</div>
           </div>
           <ChipBursts actions={visualActions} />

@@ -1,7 +1,7 @@
 from app.agents import AggressiveBot, EquityBot, LoosePassiveBot, RandomBot, RecreationalBot, TightBot
 from app.coach.equity import EquitySimulator
 from app.core.cards import Card
-from app.core.game import Action, PokerGame
+from app.core.game import Action, ActionRecord, PokerGame
 from app.services import TableRunner
 
 
@@ -129,3 +129,41 @@ def test_very_short_stacked_bot_can_push_reasonable_preflop_hand() -> None:
     action = bot.choose_action(game, player_id="p1")
 
     assert action.action == Action.ALL_IN
+
+
+def test_deep_stacked_bot_does_not_escalate_preflop_raise_war_without_premium() -> None:
+    game = PokerGame(["You", "Aggro"], seed=52)
+    bot = AggressiveBot(equity_simulator=EquitySimulator(simulations=80, seed=10), seed=10)
+    game.players[1].hole_cards = cards("Kc Qd")
+    game.players[1].current_bet = 180
+    game.players[1].total_committed = 180
+    game.players[1].stack = 820
+    game.current_player_index = 1
+    game.current_bet = 490
+    game.last_full_raise = 310
+    game.pot = 1650
+    game.action_history.append(ActionRecord("p0", Action.RAISE, 160, game.street, True))
+    game.action_history.append(ActionRecord("p1", Action.RAISE, 310, game.street, True))
+
+    action = bot.choose_action(game, player_id="p1")
+
+    assert action.action in {Action.CALL, Action.FOLD}
+
+
+def test_preflop_reraise_sizing_stays_below_stack_pressure_size() -> None:
+    game = PokerGame(["You", "Aggro"], seed=53)
+    bot = AggressiveBot(equity_simulator=EquitySimulator(simulations=80, seed=11), seed=11)
+    game.players[1].hole_cards = cards("As Ah")
+    game.players[1].current_bet = 80
+    game.players[1].total_committed = 80
+    game.players[1].stack = 920
+    game.current_player_index = 1
+    game.current_bet = 180
+    game.last_full_raise = 100
+    game.pot = 420
+    game.action_history.append(ActionRecord("p0", Action.RAISE, 100, game.street, True))
+
+    action = bot.choose_action(game, player_id="p1")
+
+    assert action.action == Action.RAISE
+    assert action.amount < 500

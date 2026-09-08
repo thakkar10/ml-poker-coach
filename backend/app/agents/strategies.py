@@ -38,6 +38,8 @@ class DecisionContext:
     pressure: float
     opponents: int
     position_factor: float
+    prior_street_raises: int
+    current_bet_bb: float
     preflop_score: float
     made_strength: float
     draw_bonus: float
@@ -126,20 +128,30 @@ class HumanStyleBot:
 
     def _choose_preflop(self, game: PokerGame, context: DecisionContext) -> AgentAction:
         personality = self.personality
-        play_threshold = personality.enter_threshold + context.pressure * 0.22 - context.position_factor * 0.08
-        raise_threshold = personality.raise_threshold + context.pressure * 0.12 - context.position_factor * 0.06
+        raise_war_penalty = context.prior_street_raises * 0.08 + max(0.0, context.current_bet_bb - 4) * 0.025
+        play_threshold = personality.enter_threshold + context.pressure * 0.22 + raise_war_penalty - context.position_factor * 0.08
+        raise_threshold = (
+            personality.raise_threshold
+            + context.pressure * 0.12
+            + context.prior_street_raises * 0.16
+            + max(0.0, context.current_bet_bb - 5) * 0.04
+            - context.position_factor * 0.06
+        )
         score = context.preflop_score + context.equity * 0.22
 
         if self._should_shove(game, context):
             return AgentAction(Action.ALL_IN, reason=f"{self.name} shoves because the stack is short or the pot already commits them.")
 
         if context.call_price > 0:
+            if context.current_bet_bb >= 12 and context.preflop_score < 0.82:
+                return _fold_or_check(context, f"{self.name} refuses to chase a huge preflop raise without a premium hand.")
             if context.preflop_score < personality.enter_threshold and context.pressure > 0.35:
                 return _fold_or_check(context, f"{self.name} folds a weak offsuit-style hand to a serious raise.")
             if score < play_threshold and context.pressure > 0.30 + personality.call_looseness:
                 return _fold_or_check(context, f"{self.name} folds a weak starting hand against a large raise.")
 
-            if Action.RAISE in context.legal and score >= raise_threshold and not self._slowplays():
+            can_reraise = context.prior_street_raises <= 1 or context.preflop_score >= 0.86
+            if Action.RAISE in context.legal and can_reraise and score >= raise_threshold and not self._slowplays():
                 return AgentAction(
                     Action.RAISE,
                     _normal_raise_amount(game, context.player, self.personality),
@@ -210,7 +222,12 @@ class HumanStyleBot:
         premium_preflop = game.street == Street.PREFLOP and context.preflop_score >= 0.86
         short_stack_push = game.street == Street.PREFLOP and context.effective_stack_bb <= 12 and context.preflop_score >= 0.58
         shallow_premium = premium_preflop and context.effective_stack_bb <= 28
-        committed_call = context.call_price > 0 and context.call_price >= context.player.stack * 0.68 and context.equity >= context.required_equity + 0.05
+        committed_call = (
+            game.street != Street.PREFLOP
+            and context.call_price > 0
+            and context.call_price >= context.player.stack * 0.68
+            and context.equity >= context.required_equity + 0.05
+        )
         low_spr_value = game.street != Street.PREFLOP and context.stack_to_pot <= 1.15 and context.equity >= 0.62
         draw_pressure = (
             game.street in {Street.FLOP, Street.TURN}
@@ -294,6 +311,8 @@ def _decision_context(
         pressure=call_price / pot_after_call,
         opponents=opponents,
         position_factor=_position_factor(game, player_id),
+        prior_street_raises=_prior_street_raises(game),
+        current_bet_bb=game.current_bet / big_blind,
         preflop_score=_starting_hand_score(player.hole_cards),
         made_strength=_made_hand_strength(game, player),
         draw_bonus=_draw_bonus(game, player),
@@ -435,6 +454,14 @@ def _amount_to_call(game: PokerGame, player_id: str) -> int:
     return max(0, game.current_bet - player.current_bet)
 
 
+def _prior_street_raises(game: PokerGame) -> int:
+    return sum(
+        record.action in {Action.BET, Action.RAISE}
+        for record in game.action_history
+        if record.street == game.street
+    )
+
+
 def _normal_bet_amount(game: PokerGame, player: PlayerState, personality: BotPersonality) -> int:
     legal = game.legal_action_state(player.id)
     if game.street == Street.PREFLOP:
@@ -451,7 +478,7 @@ def _normal_raise_amount(game: PokerGame, player: PlayerState, personality: BotP
         if game.current_bet <= game.config.big_blind:
             target = round(game.config.big_blind * (2.4 + personality.aggression * 0.8))
         else:
-            target = round(game.current_bet * (2.4 + personality.aggression * 0.7))
+            target = round(game.current_bet + game.last_full_raise * (2.1 + personality.aggression * 0.45))
     else:
         raise_size = max(game.last_full_raise, round(game.pot * _choose_sizing([0.5, 0.66, 0.75, 1.0], personality.aggression)))
         target = game.current_bet + raise_size

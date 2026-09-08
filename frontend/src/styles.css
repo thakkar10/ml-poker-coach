@@ -328,6 +328,18 @@ h2 {
   text-transform: uppercase;
 }
 
+.street-note {
+  min-height: 22px;
+  padding: 5px 9px;
+  border: 1px solid rgba(229, 185, 79, 0.16);
+  border-radius: 999px;
+  background: rgba(8, 13, 15, 0.56);
+  color: #d9b45f;
+  font-size: 0.64rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
 .player-seat {
   position: absolute;
   z-index: 2;
