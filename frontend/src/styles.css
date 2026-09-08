@@ -8,12 +8,12 @@
   text-rendering: optimizeLegibility;
   --page-pad: clamp(8px, 1.2vw, 18px);
   --table-gap: clamp(8px, 1.4vh, 16px);
-  --seat-width: clamp(118px, 9vw, 154px);
-  --user-seat-width: clamp(178px, 15vw, 218px);
-  --card-width: clamp(34px, 3vw, 46px);
-  --card-height: clamp(48px, 4.2vw, 64px);
-  --user-card-width: clamp(44px, 3.8vw, 56px);
-  --user-card-height: clamp(60px, 5.2vw, 78px);
+  --seat-width: clamp(104px, 8.2vw, 132px);
+  --user-seat-width: clamp(164px, 13vw, 196px);
+  --card-width: clamp(28px, 2.25vw, 38px);
+  --card-height: clamp(40px, 3.25vw, 54px);
+  --user-card-width: clamp(38px, 3.2vw, 50px);
+  --user-card-height: clamp(52px, 4.25vw, 68px);
 }
 
 * {
@@ -218,7 +218,7 @@ h2 {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 5px;
 }
 
 .card {
@@ -345,14 +345,16 @@ h2 {
   z-index: 2;
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 5px 8px;
+  align-items: center;
+  gap: 4px 7px;
   width: var(--seat-width);
-  min-height: clamp(104px, 13vh, 124px);
-  padding: clamp(5px, 0.55vw, 7px);
+  min-height: clamp(76px, 9.4vh, 94px);
+  padding: clamp(5px, 0.5vw, 7px);
   border: 1px solid rgba(255, 255, 255, 0.055);
   border-radius: 8px;
-  background: rgba(9, 14, 17, 0.88);
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.28);
+  background: rgba(9, 14, 17, 0.78);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.24);
   transition:
     border-color 180ms ease,
     opacity 180ms ease,
@@ -368,7 +370,7 @@ h2 {
 .player-seat.is-current::after,
 .player-seat.is-thinking::after {
   position: absolute;
-  inset: -3px;
+  inset: -2px;
   border: 2px solid rgba(229, 185, 79, 0.75);
   border-radius: 10px;
   content: "";
@@ -432,9 +434,9 @@ h2 {
 .action-timer {
   position: absolute;
   right: 10px;
-  bottom: -7px;
+  bottom: -6px;
   left: 10px;
-  height: 4px;
+  height: 3px;
   overflow: hidden;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.12);
@@ -452,48 +454,42 @@ h2 {
 
 .seat-user {
   width: var(--user-seat-width);
-  min-height: clamp(128px, 16vh, 148px);
+  min-height: clamp(104px, 13vh, 124px);
   left: 50%;
-  bottom: 10px;
+  bottom: 8px;
   transform: translateX(-50%);
 }
 
 .seat-lower-left {
-  left: 1%;
-  bottom: 12%;
+  left: 1.2%;
+  bottom: 13.5%;
 }
 
 .seat-upper-left {
-  left: 3%;
-  top: 7%;
+  left: 3.2%;
+  top: 8.5%;
 }
 
 .seat-top {
   left: 50%;
-  top: 8px;
+  top: 6px;
   transform: translateX(-50%);
 }
 
 .seat-upper-right {
-  right: 3%;
-  top: 7%;
+  right: 3.2%;
+  top: 8.5%;
 }
 
 .seat-lower-right {
-  right: 1%;
-  bottom: 12%;
+  right: 1.2%;
+  bottom: 13.5%;
 }
 
 .seat-left {
   left: 18px;
   top: 45%;
   transform: translateY(-50%);
-}
-
-.seat-top {
-  left: 50%;
-  top: 18px;
-  transform: translateX(-50%);
 }
 
 .seat-right {
@@ -504,7 +500,7 @@ h2 {
 
 .avatar-wrap {
   position: relative;
-  grid-row: span 2;
+  grid-row: 1 / span 2;
   display: grid;
   place-items: center;
   align-self: start;
@@ -544,11 +540,9 @@ h2 {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
 }
 
-.seat-meta,
-.hole-cards,
 .seat-footer,
 .action-badge,
 .all-in-badge,
@@ -557,8 +551,24 @@ h2 {
   grid-column: 1 / -1;
 }
 
+.seat-meta {
+  min-width: 0;
+}
+
+.hole-cards {
+  grid-column: 2;
+  justify-content: flex-start;
+  margin-top: -2px;
+}
+
 .seat-user .avatar-wrap {
   grid-row: span 3;
+}
+
+.seat-user .hole-cards {
+  grid-column: 1 / -1;
+  justify-content: center;
+  margin-top: 2px;
 }
 
 .seat-user .card {
@@ -576,13 +586,21 @@ h2 {
 .seat-footer b,
 .showdown-label {
   color: #cfd8dc;
-  font-size: 0.68rem;
+  font-size: clamp(0.58rem, 0.7vw, 0.66rem);
 }
 
 .seat-meta strong {
   min-width: 0;
-  font-size: clamp(0.78rem, 0.88vw, 0.9rem);
+  font-size: clamp(0.72rem, 0.82vw, 0.84rem);
   overflow-wrap: anywhere;
+}
+
+.seat-meta span {
+  white-space: nowrap;
+}
+
+.seat-footer {
+  min-height: 14px;
 }
 
 .seat-footer b {
@@ -1736,12 +1754,12 @@ h2 {
   :root {
     --page-pad: 8px;
     --table-gap: 7px;
-    --seat-width: clamp(108px, 30vw, 138px);
-    --user-seat-width: clamp(168px, 56vw, 210px);
-    --card-width: clamp(30px, 9vw, 40px);
-    --card-height: clamp(42px, 12vw, 56px);
-    --user-card-width: clamp(40px, 13vw, 52px);
-    --user-card-height: clamp(56px, 18vw, 72px);
+    --seat-width: clamp(96px, 28vw, 122px);
+    --user-seat-width: clamp(154px, 52vw, 188px);
+    --card-width: clamp(26px, 7.8vw, 34px);
+    --card-height: clamp(37px, 11vw, 48px);
+    --user-card-width: clamp(34px, 11.5vw, 46px);
+    --user-card-height: clamp(48px, 16vw, 62px);
   }
 
   .app-shell {
@@ -1761,7 +1779,7 @@ h2 {
 
   .player-seat {
     width: var(--seat-width);
-    padding: 8px;
+    padding: 6px;
   }
 
   .seat-user {
@@ -1771,22 +1789,22 @@ h2 {
 
   .seat-lower-left {
     left: 3%;
-    bottom: 20%;
+    bottom: 21%;
   }
 
   .seat-upper-left {
     left: 3%;
-    top: 12%;
+    top: 13%;
   }
 
   .seat-upper-right {
     right: 3%;
-    top: 12%;
+    top: 13%;
   }
 
   .seat-lower-right {
     right: 3%;
-    bottom: 20%;
+    bottom: 21%;
   }
 
   .card {
@@ -1880,12 +1898,12 @@ h2 {
   :root {
     --page-pad: 8px;
     --table-gap: 8px;
-    --seat-width: clamp(118px, 9vw, 148px);
-    --user-seat-width: clamp(184px, 15vw, 220px);
-    --card-width: clamp(32px, 2.5vw, 40px);
-    --card-height: clamp(44px, 3.6vw, 56px);
-    --user-card-width: clamp(42px, 3.4vw, 54px);
-    --user-card-height: clamp(58px, 4.8vw, 74px);
+    --seat-width: clamp(102px, 8vw, 128px);
+    --user-seat-width: clamp(158px, 13vw, 190px);
+    --card-width: clamp(26px, 2.2vw, 34px);
+    --card-height: clamp(38px, 3.1vw, 48px);
+    --user-card-width: clamp(36px, 3vw, 46px);
+    --user-card-height: clamp(50px, 4vw, 62px);
   }
 
   .top-bar {
@@ -1906,12 +1924,13 @@ h2 {
   }
 
   .poker-table {
-    inset: 16% 7% 18%;
+    inset: 16% 7% 17%;
   }
 
   .player-seat {
     gap: 5px 7px;
-    padding: 6px;
+    min-height: clamp(70px, 9vh, 84px);
+    padding: 5px;
   }
 
   .seat-user {
