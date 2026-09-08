@@ -104,12 +104,11 @@ export function App() {
   }, [allInIsExactCall, game?.pot, maxRaise, minRaise, user?.current_bet, user?.stack]);
   const handLesson = useMemo(() => explainStartingHand(user?.hole_cards ?? []), [user?.hole_cards]);
   const communityCards = useMemo(() => visibleCommunityCards(game), [game]);
+  const streetLabel = game ? labelStreet(game.street) : "Loading";
   const visibleActions = useMemo(() => {
     const actions = new Map<string, VisualAction>();
     for (const action of visualActions) {
-      if (!actions.has(action.player_id)) {
-        actions.set(action.player_id, action);
-      }
+      actions.set(action.player_id, action);
     }
     return actions;
   }, [visualActions]);
@@ -351,7 +350,6 @@ export function App() {
           ))}
 
           <div className="poker-table">
-            <div className="dealer-shoe" aria-hidden="true">DEALER</div>
             {game?.players.map((player, index) => (
               <BetStack
                 key={`bet-${player.id}`}
@@ -359,24 +357,27 @@ export function App() {
                 position={seatPositions[index] ?? "seat-side"}
               />
             ))}
-            <div className="pot-display">
-              <CircleDollarSign size={20} />
-              Pot ${game?.pot ?? 0}
+            <div className="table-center">
+              <div className="pot-display" aria-label={`Total pot is ${game?.pot ?? 0} dollars`}>
+                <CircleDollarSign size={18} />
+                <span>Total Pot</span>
+                <strong>${game?.pot ?? 0}</strong>
+              </div>
+              <div className="board-row" aria-label="Community cards">
+                {Array.from({ length: 5 }).map((_, index) => (
+                  <CardView
+                    key={communityCards[index] ?? `board-${index}`}
+                    card={communityCards[index]}
+                    variant="board"
+                    delayIndex={index}
+                  />
+                ))}
+              </div>
+              {game?.street === "preflop" && game.current_bet > 20 && communityCards.every((card) => !card) && (
+                <div className="street-note">Preflop betting open</div>
+              )}
+              <div className="street-pill">{streetLabel}</div>
             </div>
-            <div className="board-row" aria-label="Community cards">
-              {Array.from({ length: 5 }).map((_, index) => (
-                <CardView
-                  key={communityCards[index] ?? `board-${index}`}
-                  card={communityCards[index]}
-                  variant="board"
-                  delayIndex={index}
-                />
-              ))}
-            </div>
-            {game?.street === "preflop" && game.current_bet > 20 && communityCards.every((card) => !card) && (
-              <div className="street-note">Preflop betting is still open</div>
-            )}
-            <div className="street-pill">{game?.street ?? "loading"}</div>
           </div>
           <ChipBursts actions={visualActions} />
           {game?.street === "complete" && <PotAward winnerId={game.winners[0]} />}
@@ -430,6 +431,10 @@ export function App() {
                 onChange={(event) => setRaiseAmount(Number(event.target.value))}
                 disabled={!canAggressiveAction || loading}
               />
+              <div className="raise-limits">
+                <span>Min ${minRaise}</span>
+                <span>Max ${maxRaise}</span>
+              </div>
             </label>
             <div className="actions">
               <button className="fold-button" onClick={() => chooseAction("fold")} disabled={!canAct || !game?.legal_actions.includes("fold") || loading}>
@@ -438,11 +443,13 @@ export function App() {
               <button onClick={() => chooseAction(legalDetails?.can_check ? "check" : "call")} disabled={!canAct || (!legalDetails?.can_check && !legalDetails?.can_call) || loading}>
                 {passiveLabel}
               </button>
-              {canAggressiveAction && (
-                <button className="raise-button" onClick={() => chooseAction(game?.legal_actions.includes("bet") ? "bet" : "raise")} disabled={loading}>
-                  {aggressiveLabel}
-                </button>
-              )}
+              <button
+                className={`raise-button ${canAggressiveAction ? "is-ready" : ""}`}
+                onClick={() => chooseAction(game?.legal_actions.includes("bet") ? "bet" : "raise")}
+                disabled={!canAggressiveAction || loading}
+              >
+                {aggressiveLabel}
+              </button>
             </div>
           </div>
         </section>
@@ -553,6 +560,7 @@ function PlayerSeat({
         <strong>{player.name}</strong>
         <span>{player.all_in ? "ALL IN" : `$${player.stack}`}</span>
       </div>
+      {isCurrent && isUser && <p className="turn-label">Your turn</p>}
       <div className="hole-cards">
         {[0, 1].map((index) => (
           <CardView
@@ -565,8 +573,8 @@ function PlayerSeat({
         ))}
       </div>
       <div className="seat-footer">
-        <span>{player.folded ? "Folded" : player.all_in ? "All In" : isUser ? "Hero" : "AI Opponent"}</span>
-        {player.total_committed > 0 && <b>${player.total_committed} committed</b>}
+        <span>{player.folded ? "Folded" : player.all_in ? "All In" : isUser ? "You" : lastAction ? "Latest action" : "Ready"}</span>
+        {player.total_committed > 0 && <b>Total ${player.total_committed}</b>}
       </div>
       {player.all_in && <p className="all-in-badge">All in</p>}
       {lastAction && (
@@ -590,13 +598,13 @@ function BetStack({ player, position }: { player: Player; position: string }) {
   if (player.current_bet <= 0) return null;
 
   return (
-    <div className={`bet-stack bet-${position}`} aria-label={`${player.name} has bet ${player.current_bet}`}>
+    <div className={`bet-stack bet-${position}`} aria-label={`${player.name} currently has ${player.current_bet} dollars in this betting round`}>
       <div className="mini-chips" aria-hidden="true">
         <span />
         <span />
         <span />
       </div>
-      <strong>${player.current_bet}</strong>
+      <strong>Bet ${player.current_bet}</strong>
     </div>
   );
 }
@@ -905,6 +913,11 @@ function streetForBoardCount(cardCount: number) {
   if (cardCount === 4) return "turn";
   if (cardCount >= 3) return "flop";
   return "preflop";
+}
+
+function labelStreet(street: GameResponse["game"]["street"]) {
+  if (street === "complete") return "Showdown";
+  return street.charAt(0).toUpperCase() + street.slice(1);
 }
 
 function hasStreetAdvanced(previousGame: GameResponse["game"], nextGame: GameResponse["game"]) {
