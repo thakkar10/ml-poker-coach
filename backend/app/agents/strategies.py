@@ -150,7 +150,15 @@ class HumanStyleBot:
             if score < play_threshold and context.pressure > 0.30 + personality.call_looseness:
                 return _fold_or_check(context, f"{self.name} folds a weak starting hand against a large raise.")
 
-            can_reraise = context.prior_street_raises <= 1 or context.preflop_score >= 0.86
+            facing_stack_pressure = context.call_price >= context.player.stack * 0.5 and context.stack_bb > 15
+            if facing_stack_pressure and context.preflop_score < 0.88:
+                return _fold_or_check(context, f"{self.name} avoids putting the whole stack in preflop without a premium hand.")
+
+            can_reraise = (
+                context.prior_street_raises == 0
+                or context.preflop_score >= 0.88
+                or (context.prior_street_raises == 1 and context.current_bet_bb <= 4 and context.preflop_score >= 0.80)
+            )
             if Action.RAISE in context.legal and can_reraise and score >= raise_threshold and not self._slowplays():
                 return AgentAction(
                     Action.RAISE,
@@ -220,18 +228,19 @@ class HumanStyleBot:
             return False
 
         premium_preflop = game.street == Street.PREFLOP and context.preflop_score >= 0.86
-        short_stack_push = game.street == Street.PREFLOP and context.effective_stack_bb <= 12 and context.preflop_score >= 0.58
-        shallow_premium = premium_preflop and context.effective_stack_bb <= 28
+        short_stack_push = game.street == Street.PREFLOP and context.effective_stack_bb <= 10 and context.preflop_score >= 0.64
+        shallow_premium = premium_preflop and context.effective_stack_bb <= 14
         committed_call = (
             game.street != Street.PREFLOP
             and context.call_price > 0
-            and context.call_price >= context.player.stack * 0.68
-            and context.equity >= context.required_equity + 0.05
+            and context.call_price >= context.player.stack * 0.75
+            and context.stack_to_pot <= 0.85
+            and context.equity >= context.required_equity + 0.10
         )
-        low_spr_value = game.street != Street.PREFLOP and context.stack_to_pot <= 1.15 and context.equity >= 0.62
+        low_spr_value = game.street != Street.PREFLOP and context.stack_to_pot <= 0.75 and context.equity >= 0.72
         draw_pressure = (
             game.street in {Street.FLOP, Street.TURN}
-            and context.stack_to_pot <= 1.35
+            and context.stack_to_pot <= 0.70
             and context.draw_bonus >= 0.10
             and self._rng.random() < self.personality.bluff_frequency * 0.55
         )
@@ -493,7 +502,7 @@ def _choose_sizing(sizes: list[float], aggression: float) -> float:
 def _clamp_non_all_in(target: int, minimum: int, maximum: int) -> int:
     target = min(maximum, max(minimum, _round_to_chip(target)))
     if maximum > minimum and target >= maximum:
-        return max(minimum, _round_to_chip(minimum + (maximum - minimum) * 0.62))
+        return max(minimum, _round_to_chip(minimum + (maximum - minimum) * 0.35))
     return target
 
 

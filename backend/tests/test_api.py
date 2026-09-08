@@ -138,10 +138,38 @@ def test_review_endpoint_returns_player_style_after_decision() -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["decisions"] == 1
+    assert payload["decisions"] >= 1
     assert payload["style"]
-    assert payload["decision_log"][0]["action"] == "fold"
+    assert payload["decision_log"][-1]["action"] == "fold"
     assert "coach_alignment" in payload
+
+
+def test_player_style_review_accumulates_across_new_hands() -> None:
+    first = client.post(
+        "/api/game/new",
+        json={"player_names": ["You", "Tight Bot", "Aggressive Bot"], "seed": 501},
+    ).json()
+    first_game_id = first["game"]["id"]
+    first_action = "call" if "call" in first["game"]["legal_actions"] else "check"
+    client.post(
+        f"/api/game/{first_game_id}/action",
+        json={"action": first_action, "amount": 0},
+    )
+    first_review = client.get(f"/api/game/{first_game_id}/review").json()
+
+    second = client.post(
+        "/api/game/new",
+        json={"player_names": ["You", "Tight Bot", "Aggressive Bot"], "seed": 502},
+    ).json()
+    second_game_id = second["game"]["id"]
+    second_action = "call" if "call" in second["game"]["legal_actions"] else "check"
+    client.post(
+        f"/api/game/{second_game_id}/action",
+        json={"action": second_action, "amount": 0},
+    )
+    second_review = client.get(f"/api/game/{second_game_id}/review").json()
+
+    assert second_review["decisions"] >= first_review["decisions"] + 1
 
 
 def test_apply_unknown_action_returns_400() -> None:

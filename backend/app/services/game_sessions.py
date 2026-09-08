@@ -21,6 +21,7 @@ class GameSession:
 class GameSessionStore:
     def __init__(self) -> None:
         self._sessions: dict[str, GameSession] = {}
+        self._player_decision_logs: list[DecisionLog] = []
 
     def create(self, player_names: list[str], *, seed: int | None = None) -> GameSession:
         game = PokerGame(player_names, seed=seed)
@@ -28,7 +29,7 @@ class GameSessionStore:
             game=game,
             runner=TableRunner(_default_agents(game)),
             coach=PokerCoach(EquitySimulator(simulations=500, seed=seed)),
-            decision_logs=[],
+            decision_logs=self._player_decision_logs,
         )
         self._sessions[game.id] = session
         return session

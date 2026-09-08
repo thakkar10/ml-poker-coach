@@ -131,6 +131,22 @@ def test_very_short_stacked_bot_can_push_reasonable_preflop_hand() -> None:
     assert action.action == Action.ALL_IN
 
 
+def test_medium_stacked_bot_does_not_shove_premium_preflop_hand() -> None:
+    game = PokerGame(["You", "Aggro"], seed=41)
+    bot = AggressiveBot(equity_simulator=EquitySimulator(simulations=80, seed=12), seed=12)
+    game.players[1].hole_cards = cards("As Ah")
+    game.players[1].stack = 460
+    game.players[1].current_bet = 20
+    game.current_player_index = 1
+    game.current_bet = 60
+    game.pot = 110
+
+    action = bot.choose_action(game, player_id="p1")
+
+    assert action.action in {Action.CALL, Action.RAISE}
+    assert action.action != Action.ALL_IN
+
+
 def test_deep_stacked_bot_does_not_escalate_preflop_raise_war_without_premium() -> None:
     game = PokerGame(["You", "Aggro"], seed=52)
     bot = AggressiveBot(equity_simulator=EquitySimulator(simulations=80, seed=10), seed=10)
