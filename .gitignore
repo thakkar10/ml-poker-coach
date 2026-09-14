@@ -22,3 +22,8 @@ frontend/vite.config.d.ts
 # Environment
 .env
 .DS_Store
+
+# Godot imports and exported builds
+game/.godot/
+game/build/
+.tools/

@@ -1,0 +1,23 @@
+; Open this file in Godot 4.5.2.
+config_version=5
+
+[application]
+config/name="ML Poker Coach - The Practice Room"
+run/main_scene="res://scenes/table.tscn"
+config/features=PackedStringArray("4.5", "GL Compatibility")
+
+[display]
+window/size/viewport_width=1280
+window/size/viewport_height=800
+window/size/window_width_override=1280
+window/size/window_height_override=800
+window/stretch/mode="canvas_items"
+window/stretch/aspect="keep"
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/default_filters/use_nearest_mipmap_filter=false
+textures/vram_compression/import_etc2_astc=true
+textures/canvas_textures/default_texture_filter=0
+environment/defaults/default_clear_color=Color(0.055, 0.075, 0.09, 1)

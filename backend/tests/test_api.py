@@ -144,7 +144,7 @@ def test_review_endpoint_returns_player_style_after_decision() -> None:
     assert "coach_alignment" in payload
 
 
-def test_player_style_review_accumulates_across_new_hands() -> None:
+def test_independent_hands_do_not_share_player_review_history() -> None:
     first = client.post(
         "/api/game/new",
         json={"player_names": ["You", "Tight Bot", "Aggressive Bot"], "seed": 501},
@@ -169,7 +169,22 @@ def test_player_style_review_accumulates_across_new_hands() -> None:
     )
     second_review = client.get(f"/api/game/{second_game_id}/review").json()
 
-    assert second_review["decisions"] >= first_review["decisions"] + 1
+    assert first_review["decisions"] == 1
+    assert second_review["decisions"] == 1
+    assert client.get(f"/api/game/{first_game_id}/review").json() == first_review
+
+
+def test_rejected_action_is_not_recorded_as_player_behavior() -> None:
+    created = client.post(
+        "/api/game/new",
+        json={"player_names": ["You", "Bot"], "seed": 104},
+    ).json()
+    game_id = created["game"]["id"]
+    response = client.post(
+        f"/api/game/{game_id}/action", json={"action": "raise", "amount": -100},
+    )
+    assert response.status_code == 400
+    assert client.get(f"/api/game/{game_id}/review").json()["decisions"] == 0
 
 
 def test_apply_unknown_action_returns_400() -> None:
