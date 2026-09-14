@@ -21,7 +21,6 @@ class GameSession:
 class GameSessionStore:
     def __init__(self) -> None:
         self._sessions: dict[str, GameSession] = {}
-        self._player_decision_logs: list[DecisionLog] = []
 
     def create(self, player_names: list[str], *, seed: int | None = None) -> GameSession:
         game = PokerGame(player_names, seed=seed)
@@ -29,7 +28,7 @@ class GameSessionStore:
             game=game,
             runner=TableRunner(_default_agents(game)),
             coach=PokerCoach(EquitySimulator(simulations=500, seed=seed)),
-            decision_logs=self._player_decision_logs,
+            decision_logs=[],
         )
         self._sessions[game.id] = session
         return session
@@ -57,22 +56,20 @@ class GameSessionStore:
             raise ValueError("It is not currently the user's turn")
 
         recommendation = session.coach.recommend(game, player_id=user_player_id)
-        player = _player(game, user_player_id)
-        session.decision_logs.append(
-            DecisionLog(
-                street=game.street.value,
-                action=action,
-                amount=amount,
-                recommended_action=recommendation.action,
-                equity=recommendation.equity,
-                pot_odds=recommendation.pot_odds,
-                confidence=recommendation.confidence,
-                pot=game.pot,
-                current_bet=game.current_bet,
-                active_players=len(game.active_players),
-            )
+        decision = DecisionLog(
+            street=game.street.value,
+            action=action,
+            amount=amount,
+            recommended_action=recommendation.action,
+            equity=recommendation.equity,
+            pot_odds=recommendation.pot_odds,
+            confidence=recommendation.confidence,
+            pot=game.pot,
+            current_bet=game.current_bet,
+            active_players=len(game.active_players),
         )
         game.apply_action(action, amount)
+        session.decision_logs.append(decision)
         bot_logs = session.runner.play_until_user_turn_or_complete(
             game,
             user_player_id=user_player_id,
